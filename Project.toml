@@ -1,0 +1,12 @@
+name = "automated_trading_test_enviroment"
+uuid = "acd55cec-8ad4-4058-8ce9-6d288b582186"
+version = "0.1.0"
+authors = ["sdwhardy <40562565+sdwhardy@users.noreply.github.com>"]
+
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+MarketData = "945b72a4-3b13-509d-9b46-1525bb5c06de"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+MarketData = "0.15.0"
