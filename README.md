@@ -1,1 +1,1 @@
-# automated_trading_test_enviroment.jl
+# automated_trading_test_environment.jl

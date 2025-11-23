@@ -1,4 +1,4 @@
-module automated_trading_test_enviroment
+module automated_trading_test_environment
 
 """
     greet(name::String)
@@ -8,7 +8,7 @@ module automated_trading_test_enviroment
     Describe the function in between the triple quotes. 
     When adding new functions to your package, make sure to add the name of the function in the index.md as: 
     ```@docs
-    automated_trading_test_enviroment.greet
+    automated_trading_test_environment.greet
     ```
 
 """
