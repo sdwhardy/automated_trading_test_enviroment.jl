@@ -1,5 +1,4 @@
 module automated_trading_test_environment
-
 """
     greet(name::String)
 
