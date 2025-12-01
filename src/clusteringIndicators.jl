@@ -241,7 +241,7 @@ function volume_zscore(volume::AbstractVector, n::Int=21)
 end
 
 """
-    amihud_df(prices::AbstractVector, volume::AbstractVector, n::Int=21)
+    amihud(prices::AbstractVector, volume::AbstractVector, n::Int=21)
 
 Compute n-period rolling Amihud Illiquidity Ratio.
 Returns a DataFrame aligned with the original price vector.
@@ -271,4 +271,62 @@ function amihud(prices::AbstractVector, volume::AbstractVector, n::Int=21)
     end
 
     return illiq
+end
+
+"""
+    zscore_df(df::DataFrame, cols::Vector{Symbol};
+              suffix::AbstractString = :_z,
+              ddof::Int = 1)
+
+Standardize columns `cols` in `df` using z-score (mean/std) while ignoring `missing`.
+Returns a tuple `(df_out, scaler)` where:
+- `df_out` is a DataFrame with new columns named `col * suffix` containing z-scores (type `Union{Float64,Missing}`).
+- `scaler` is a Dict{Symbol, Tuple{Float64, Float64}} mapping each column => (mean, std).
+
+Parameters:
+- `cols`: vector of column Symbols to standardize.
+- `suffix`: suffix appended to original column name (default `:_z` -> `:feature_z`).
+- `ddof`: delta degrees of freedom for std (1 for sample std).
+"""
+function zscore_df(df::DataFrame, cols::Vector{Symbol}; suffix::AbstractString=":z", ddof::Int=1)
+    # ensure suffix is string and produce column names
+    suf = typeof(suffix) <: Symbol ? string(suffix) : String(suffix)
+    df_out = copy(df)
+    scaler = Dict{Symbol, Tuple{Float64, Float64}}()
+
+    for c in cols
+        @assert hasproperty(df, c) "Column $(c) not found"
+
+        col = df[!, c]
+        # compute mean and std ignoring missing
+        vals = collect(skipmissing(col))
+        if isempty(vals)
+            μ = NaN
+            σ = NaN
+        else
+            μ = mean(vals)
+            σ = std(vals; corrected = (ddof==1))
+            # guard against zero std
+            if σ == 0.0 || isnan(σ)
+                σ = 1.0
+            end
+        end
+
+        scaler[c] = (μ, σ)
+
+        # create output column with same length, allow missing
+        zcol = Vector{Union{Float64, Missing}}(undef, length(col))
+        @inbounds for i in eachindex(col)
+            if ismissing(col[i])
+                zcol[i] = missing
+            else
+                zcol[i] = (float(col[i]) - μ) / σ
+            end
+        end
+
+        newname = Symbol(string(c) * suf)
+        df_out[!, newname] = zcol
+    end
+
+    return df_out, scaler
 end
