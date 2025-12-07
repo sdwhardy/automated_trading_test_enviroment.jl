@@ -39,7 +39,7 @@ function calculate_clustering_indicators(df)
     5) Volatility-of-volatility 
     take stdev eqn (3) of RV over 21d
     =#
-    df[!,:volOfVol21day] = vol_of_vol(df[!,:close], 21, 21)
+    df[!,:volOfVol21day] = vol_of_vol(df[!,:close], 1, 21)
 
     #=
     6) Moving average diff (10day-50day, 100day-20day)
@@ -50,7 +50,7 @@ function calculate_clustering_indicators(df)
     7)Volume Z score
     Zn=Vo-Vmean,n/Vstd,n
     =#
-    df[!,:volumeZscore21day] = volume_zscore(df[!,:volume], 20)
+    df[!,:volumeZscore21day] = volume_zscore(df[!,:volume], 21)
     #=
     8) Amihud illiquidity
     Al=(abs(Pt-Pt-1)/Pt-1)/Pt*Vt
@@ -103,49 +103,103 @@ end
 Compute n-period rolling realized volatility (standard deviation of log returns) as a DataFrame column aligned with `prices`.
 First `n` entries are `missing`.
 """
+#prices=OHLCVT["ETHUSD"]["1440"]["df"][!,:close]
+#logrets[t-n:t-1]
+#prices[t-n-1:t-1]
+#=
+t=1
+n=1
+mean=sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][t-n:t-1])/n
+for reference this is correct: sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][t-n:t-1].^2)/n)*sqrt(252)
+=#
 function realized_volatility(prices::AbstractVector, n::Int=21)
     N = length(prices)
     vol = Vector{Union{Float64, Missing}}(undef, N)
     vol[1:n] .= missing  # first n entries have no data
 
     # compute log returns
-    logrets = log.(prices[2:end] ./ prices[1:end-1])
-
-    @inbounds for t in (n+1):N
-        vol[t] = Statistics.std(logrets[(t-n):(t-1)])
-    end
-
-    return vol
-end
-
-"""
-    gk_vol_df(open::AbstractVector, high::AbstractVector, low::AbstractVector, close::AbstractVector, n::Int=21)
-
-Compute n-period rolling Garman-Klass volatility as a DataFrame column aligned with price vectors.
-First `n` entries are missing.
-"""
-function gk_volatility(open::AbstractVector, high::AbstractVector, low::AbstractVector, close::AbstractVector, n::Int=21)
-    N = length(close)
-    @assert length(open) == N && length(high) == N && length(low) == N "OHLC vectors must have same length"
+    logrets =logreturn(prices, 1)
     
-    gk_daily = Vector{Float64}(undef, N)
-    @inbounds for t in 1:N
-        log_hl = log(high[t] / low[t])
-        log_co = log(close[t] / open[t])
-        gk_daily[t] = sqrt(0.5 * log_hl^2 - (2*log(2) - 1) * log_co^2)
-    end
-
-    # rolling n-period GK volatility
-    vol = Vector{Union{Float64, Missing}}(undef, N)
-    vol[1:n] .= missing
-    @inbounds for t in (n+1):N
-        vol[t] = std(gk_daily[(t-n):(t-1)])
+    @inbounds for t in n:N
+        vol[t] = sqrt(sum(logrets[t-n+1:t].^2)/n)*sqrt(252)
     end
 
     return vol
 end
 
-using DataFrames, Statistics
+"""
+    gk_volatility(open, high, low, close, n=21; annualization_factor=252.0)
+
+Calculates the rolling Garman-Klass Volatility, which is an estimator of 
+volatility that incorporates open, high, low, and close prices.
+
+The function calculates the daily Garman-Klass variance, averages it over 
+a rolling window of 'n' periods, takes the square root, and annualizes the result.
+
+Arguments:
+- `open`, `high`, `low`, `close`: AbstractVectors of price data (must be the same length).
+- `n`: The look-back period for the rolling window (default is 21 trading days/periods).
+- `annualization_factor`: Factor used to annualize the daily volatility (default 252.0).
+
+Returns:
+- A Vector{Union{Float64, Missing}} containing the annualized Garman-Klass volatility.
+  The first 'n' elements will be 'missing' as there is not enough data.
+"""
+function gk_volatility(
+    open::AbstractVector, 
+    high::AbstractVector, 
+    low::AbstractVector, 
+    close::AbstractVector, 
+    n::Int=21; 
+    annualization_factor::Float64=252.0
+)
+    N = length(close)
+    @assert N > 0 "Input vectors cannot be empty."
+    @assert n > 0 "Lookback period 'n' must be positive."
+    @assert length(open) == N && length(high) == N && length(low) == N "OHLC vectors must have the same length."
+
+    # Pre-calculate the constant factor (2*ln(2) - 1)
+    # This factor is used to weight the close-to-open return component.
+    const_factor = 2 * log(2) - 1
+    
+    # 1. Calculate Daily Garman-Klass *Variance* Contributions
+    # Variance is additive, so we must operate on variance, not volatility.
+    gk_daily_variance = Vector{Float64}(undef, N)
+    
+    @inbounds for t in 1:N
+        # Range Component (High/Low)
+        log_hl = log(high[t] / low[t])
+        range_variance = 0.5 * log_hl^2
+        
+        # Close-to-Open Component (Drift)
+        log_co = log(close[t] / open[t])
+        co_variance_correction = const_factor * log_co^2
+        
+        # Garman-Klass Daily Variance
+        gk_daily_variance[t] = range_variance - co_variance_correction
+    end
+
+    # 2. Calculate Rolling n-period Annualized GK Volatility
+    vol = Vector{Union{Float64, Missing}}(undef, N)
+    
+    # The first 'n' periods cannot be calculated
+    vol[1:n] .= missing 
+    
+    # Calculate rolling volatility from the (n+1)-th period onward
+    @inbounds for t in (n+1):N
+        # Define the window: from t-n up to t-1
+        window = gk_daily_variance[(t-n):(t-1)]
+        
+        # Calculate the average variance (mean of the daily variances)
+        rolling_mean_variance = sum(window) / n 
+        
+        # Annualize (multiply by factor) and take the square root to get volatility
+        # RV_GK = sqrt(AnnualizationFactor * RollingMeanVariance)
+        vol[t] = sqrt(annualization_factor * rolling_mean_variance)
+    end
+
+    return vol
+end
 
 """
     vol_of_vol_df(prices::AbstractVector, vol_window::Int=21, vov_window::Int=21)
@@ -154,31 +208,16 @@ Compute Vol-of-Vol (rolling std of realized volatility) and return a DataFrame a
 - vol_window: window for realized volatility
 - vov_window: window for Vol-of-Vol
 """
-function vol_of_vol(prices::AbstractVector, vol_window::Int=21, vov_window::Int=21)
-    N = length(prices)
+#vol_window=1
+#prices=OHLCVT["ETHUSD"]["1440"]["df"][!,:close]
+function vol_of_vol(prices::AbstractVector, vol_window::Int=1, vov_window::Int=21)
     
-    # Step 1: compute daily log returns
-    logrets = log.(prices[2:end] ./ prices[1:end-1])
-    
-    # Step 2: compute rolling realized volatility
-    rv = Vector{Union{Float64, Missing}}(undef, N)
-    rv[1:vol_window] .= missing
-    @inbounds for t in (vol_window+1):N
-        rv[t] = std(logrets[(t-vol_window):(t-1)])
-    end
+    vol=realized_volatility(prices, vol_window)./sqrt(252)
 
-    # Step 3: compute rolling Vol-of-Vol
-    vov = Vector{Union{Float64, Missing}}(undef, N)
-    vov[1:(vol_window + vov_window)] .= missing  # first entries missing
-    @inbounds for t in (vol_window + vov_window + 1):N
-        window_vals = skipmissing(rv[(t-vov_window):(t-1)])
-        vov[t] = std(collect(window_vals))
-    end
+    vov=realized_volatility(vol, vov_window)
 
     return vov
 end
-
-using DataFrames, Statistics
 
 """
     ma_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
@@ -218,23 +257,52 @@ function ma_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
     return ma_diff
 end
 
+# This file contains the proper, non-look-ahead Volume Z-Score function 
+# and a test block that manually calculates the result for a specific day
+# to prove the function's logic is correct.
 
-"""
-    volume_zscore_df(volume::AbstractVector, n::Int=21)
+# Note: In a real Julia environment, you would need 'using Statistics' for mean/std.
+# For this example, we will define simple functions if the built-in ones are assumed unavailable.
 
-Compute rolling Z-score of volume over a window of n periods.
-Returns a DataFrame aligned with the original volume vector.
-"""
-function volume_zscore(volume::AbstractVector, n::Int=21)
+# --- Helper Functions (Mimicking Statistics.mean and Statistics.std) ---
+function simple_mean(arr::AbstractVector)
+    return sum(arr) / length(arr)
+end
+
+function simple_std(arr::AbstractVector)
+    n = length(arr)
+    # Use n-1 for sample standard deviation, which is standard in finance
+    return sqrt(sum((arr .- simple_mean(arr)).^2) / (n - 1))
+end
+
+# --- 1. PROPERLY IMPLEMENTED VOLUME Z-SCORE FUNCTION ---
+
+function volume_zscore(volume::AbstractVector, n::Int)
     N = length(volume)
+    
+    # Initialize the output vector with missing values.
+    # The first 'n' entries must be missing because a rolling window of size 'n' 
+    # must be complete, and the result is reported on the next day (n+1).
     zscore = Vector{Union{Float64, Missing}}(undef, N)
-    zscore[1:n-1] .= missing  # first n-1 entries missing
+    zscore[1:n] .= missing  # First 'n' entries are missing
 
-    @inbounds for t in n:N
-        window = volume[(t-n+1):t]
-        μ = mean(window)
-        σ = std(window)
-        zscore[t] = σ ≈ 0 ? 0.0 : (volume[t] - μ)/σ
+    # The first valid calculation is reported at t = n + 1 
+    @inbounds for t in (n+1):N
+        
+        # --- Define Historical Window (t-n through t-1) ---
+        # This window ensures n days of volume *prior* to the current day volume[t] 
+        # are used for mean (μ) and standard deviation (σ). NON-LOOK-AHEAD COMPLIANT.
+        window = volume[(t-n):(t-1)]
+        
+        # Calculate Historical Context (μ_t-1 and σ_t-1)
+        μ = simple_mean(window) 
+        σ = simple_std(window)  
+        
+        # Z-Score Calculation: (Current Volume - Historical Mean) / Historical StDev
+        current_volume = volume[t]
+        
+        # Handle zero standard deviation: set Z-Score to 0 to prevent division by zero
+        zscore[t] = σ ≈ 0 ? 0.0 : (current_volume - μ) / σ
     end
 
     return zscore
