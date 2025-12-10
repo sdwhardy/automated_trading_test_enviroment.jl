@@ -18,8 +18,6 @@ OHLCVT=Dict()
 pair="ETHUSD"
 interval="1440"
 push!(OHLCVT,pair=>Dict(interval=>Dict("df"=>get_pair_interval_df(pair,interval),"dict"=>Dict())))
-#interval="720"
-#push!(OHLCVT[pair],interval=>Dict("df"=>get_pair_interval_df(pair,interval),"dict"=>Dict()))
 
 #=ts = OHLCVT["ETHUSD"]["1440"]["df"][!,:timestamp][1]
 dt = unix2datetime(ts)
@@ -28,39 +26,16 @@ println(dt_be)=#
 
 OHLCVT["ETHUSD"]["1440"]["df"]=calculate_clustering_indicators(OHLCVT["ETHUSD"]["1440"]["df"])
 
-#=NOTE: next step Validate!!!!!!!!!!!!
-
-
-
-
-
-
-8) Amihud illiquidity
-    Al=(abs(Pt-Pt-1)/Pt-1)/Pt*Vt
-    - average this over a window
-=#
-#t=2267;T=21
-simple_returns=abs.((OHLCVT["ETHUSD"]["1440"]["df"][!,:close][2:end] .- OHLCVT["ETHUSD"]["1440"]["df"][!,:close][1:end-1]))./OHLCVT["ETHUSD"]["1440"]["df"][!,:close][1:end-1]
-illiq = simple_returns ./ (OHLCVT["ETHUSD"]["1440"]["df"][!,:volume][2:end] .* OHLCVT["ETHUSD"]["1440"]["df"][!,:close][2:end])
-mean(illiq[t-T:t-1])
-OHLCVT["ETHUSD"]["1440"]["df"][!,:amihud21day][t]
 #=
 Transform 
 Amihud illiquidity:
-→ into log(1 + amihud)
-
-Volume:
-You already have a Z-score, so no need to standardize again.
+into log(1 + amihud)
 
 Volatility and vol-of-vol:
-Often stabilized with
-→ log(vol)
-→ then z-score
-
+Often stabilized with log(x)
 
 Apply z-score standardization to all remaining raw features
 =#
-
 OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol5day]=log.(OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol5day])
 OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol10day]=log.(OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol10day])
 OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol21day]=log.(OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol21day])

@@ -25,9 +25,9 @@ function calculate_clustering_indicators(df)
     ​annuallized=σn​ \dot sqrt(252)
     ​5, 10, 21 day windows
     =#
-    df[!,:realVol5day] = realized_volatility(df[!,:close], 5)
-    df[!,:realVol10day] = realized_volatility(df[!,:close], 10)
-    df[!,:realVol21day] = realized_volatility(df[!,:close], 21)
+    df[!,:realVol5day] = annualized_realized_volatility(df[!,:close], 5)
+    df[!,:realVol10day] = annualized_realized_volatility(df[!,:close], 10)
+    df[!,:realVol21day] = annualized_realized_volatility(df[!,:close], 21)
 
     #=
     4) Garman–Klass volatility (21-day)
@@ -98,21 +98,12 @@ function roc(prices::AbstractVector, n::Int=1)
 end
 
 """
-    realized_vol_df(prices::AbstractVector, n::Int=21)
+    daily_realized_vol_df(prices::AbstractVector, n::Int=21)
 
 Compute n-period rolling realized volatility (standard deviation of log returns) as a DataFrame column aligned with `prices`.
 First `n` entries are `missing`.
 """
-#prices=OHLCVT["ETHUSD"]["1440"]["df"][!,:close]
-#logrets[t-n:t-1]
-#prices[t-n-1:t-1]
-#=
-t=1
-n=1
-mean=sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][t-n:t-1])/n
-for reference this is correct: sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][t-n:t-1].^2)/n)*sqrt(252)
-=#
-function realized_volatility(prices::AbstractVector, n::Int=21)
+function daily_realized_volatility(prices::AbstractVector, n::Int=21)
     N = length(prices)
     vol = Vector{Union{Float64, Missing}}(undef, N)
     vol[1:n] .= missing  # first n entries have no data
@@ -121,10 +112,22 @@ function realized_volatility(prices::AbstractVector, n::Int=21)
     logrets =logreturn(prices, 1)
     
     @inbounds for t in n:N
-        vol[t] = sqrt(sum(logrets[t-n+1:t].^2)/n)*sqrt(252)
+        vol[t] = sqrt(sum(logrets[t-n+1:t].^2)/n)
     end
 
     return vol
+end
+
+"""
+    annualized_realized_vol_df(prices::AbstractVector, n::Int=21)
+
+Compute n-period rolling realized volatility (standard deviation of log returns) as a DataFrame column aligned with `prices`.
+First `n` entries are `missing`.
+"""
+function annualized_realized_volatility(prices::AbstractVector, n::Int=21)
+    
+     return  daily_realized_volatility(prices, n).*sqrt(252)
+
 end
 
 """
@@ -208,13 +211,11 @@ Compute Vol-of-Vol (rolling std of realized volatility) and return a DataFrame a
 - vol_window: window for realized volatility
 - vov_window: window for Vol-of-Vol
 """
-#vol_window=1
-#prices=OHLCVT["ETHUSD"]["1440"]["df"][!,:close]
 function vol_of_vol(prices::AbstractVector, vol_window::Int=1, vov_window::Int=21)
     
-    vol=realized_volatility(prices, vol_window)./sqrt(252)
+    vol=daily_realized_volatility(prices, vol_window)
 
-    vov=realized_volatility(vol, vov_window)
+    vov=daily_realized_volatility(vol, vov_window)
 
     return vov
 end
@@ -257,14 +258,6 @@ function ma_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
     return ma_diff
 end
 
-# This file contains the proper, non-look-ahead Volume Z-Score function 
-# and a test block that manually calculates the result for a specific day
-# to prove the function's logic is correct.
-
-# Note: In a real Julia environment, you would need 'using Statistics' for mean/std.
-# For this example, we will define simple functions if the built-in ones are assumed unavailable.
-
-# --- Helper Functions (Mimicking Statistics.mean and Statistics.std) ---
 function simple_mean(arr::AbstractVector)
     return sum(arr) / length(arr)
 end

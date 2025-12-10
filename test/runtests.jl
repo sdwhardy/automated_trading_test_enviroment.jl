@@ -214,8 +214,8 @@ import automated_trading_test_environment  as ATTE# Import your package
 
     println("Testing 21 day Volatility of Volatility...")
     for (t,T) in [(69,21),(149,21),(1512,21),(2289,21),(3519,21)]
-        vol=ATTE.realized_volatility(OHLCVT["ETHUSD"]["1440"]["df"][!,:close],1)
-        vov=ATTE.realized_volatility(vol,T)
+        vol=ATTE.daily_realized_volatility(OHLCVT["ETHUSD"]["1440"]["df"][!,:close],1)
+        vov=ATTE.daily_realized_volatility(vol,T)
         result=isapprox(
             # Actual pre-calculated Volatility of Volatility
             OHLCVT["ETHUSD"]["1440"]["df"][!,:volOfVol21day][t], 
