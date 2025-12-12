@@ -109,14 +109,17 @@ function daily_realized_volatility(prices::AbstractVector, n::Int=21)
     vol[1:n] .= missing  # first n entries have no data
 
     # compute log returns
-    logrets =logreturn(prices, 1)
-    
-    @inbounds for t in n:N
-        vol[t] = sqrt(sum(logrets[t-n+1:t].^2)/n)
+    logrets = logreturn(prices, 1)
+
+    @inbounds for t in n+1:N
+        # take the last n valid log returns ending at t-1
+        window = skipmissing(logrets[(t-n):(t-1)])
+        vol[t] = sqrt(sum(window.^2)/n)
     end
 
     return vol
 end
+
 
 """
     annualized_realized_vol_df(prices::AbstractVector, n::Int=21)
@@ -215,7 +218,15 @@ function vol_of_vol(prices::AbstractVector, vol_window::Int=1, vov_window::Int=2
     
     vol=daily_realized_volatility(prices, vol_window)
 
-    vov=daily_realized_volatility(vol, vov_window)
+    N = length(prices)
+
+    vov = Vector{Union{Float64,Missing}}(undef, N)
+    vov[1:(vol_window + vov_window - 1)] .= missing
+
+    @inbounds for t in (vol_window + vov_window):N
+        window = skipmissing(vol[(t - vov_window + 1):t])
+        vov[t] = std(collect(window))
+    end
 
     return vov
 end
@@ -272,34 +283,25 @@ end
 
 function volume_zscore(volume::AbstractVector, n::Int)
     N = length(volume)
-    
-    # Initialize the output vector with missing values.
-    # The first 'n' entries must be missing because a rolling window of size 'n' 
-    # must be complete, and the result is reported on the next day (n+1).
-    zscore = Vector{Union{Float64, Missing}}(undef, N)
-    zscore[1:n] .= missing  # First 'n' entries are missing
 
-    # The first valid calculation is reported at t = n + 1 
+    zscore = Vector{Union{Float64, Missing}}(undef, N)
+    zscore[1:n] .= missing
+
     @inbounds for t in (n+1):N
-        
-        # --- Define Historical Window (t-n through t-1) ---
-        # This window ensures n days of volume *prior* to the current day volume[t] 
-        # are used for mean (μ) and standard deviation (σ). NON-LOOK-AHEAD COMPLIANT.
-        window = volume[(t-n):(t-1)]
-        
-        # Calculate Historical Context (μ_t-1 and σ_t-1)
-        μ = simple_mean(window) 
-        σ = simple_std(window)  
-        
-        # Z-Score Calculation: (Current Volume - Historical Mean) / Historical StDev
+        # historical window
+        window = skipmissing(volume[(t-n):(t-1)])
+
+        μ = simple_mean(collect(window))
+        σ = simple_std(collect(window))
+
         current_volume = volume[t]
-        
-        # Handle zero standard deviation: set Z-Score to 0 to prevent division by zero
+
         zscore[t] = σ ≈ 0 ? 0.0 : (current_volume - μ) / σ
     end
 
     return zscore
 end
+
 
 """
     amihud(prices::AbstractVector, volume::AbstractVector, n::Int=21)
@@ -334,6 +336,12 @@ function amihud(prices::AbstractVector, volume::AbstractVector, n::Int=21)
     return illiq
 end
 
+
+function signed_log(x)
+    return sign(x) * log1p(abs(x))
+end
+
+
 """
     zscore_df(df::DataFrame, cols::Vector{Symbol};
               suffix::AbstractString = :_z,
@@ -349,9 +357,8 @@ Parameters:
 - `suffix`: suffix appended to original column name (default `:_z` -> `:feature_z`).
 - `ddof`: delta degrees of freedom for std (1 for sample std).
 """
-function zscore_df(df::DataFrame, cols::Vector{Symbol}; suffix::AbstractString=":z", ddof::Int=1)
+function zscore_df(df::DataFrame, cols::Vector{Symbol}, ddof::Int=1)
     # ensure suffix is string and produce column names
-    suf = typeof(suffix) <: Symbol ? string(suffix) : String(suffix)
     df_out = copy(df)
     scaler = Dict{Symbol, Tuple{Float64, Float64}}()
 
@@ -385,9 +392,37 @@ function zscore_df(df::DataFrame, cols::Vector{Symbol}; suffix::AbstractString="
             end
         end
 
-        newname = Symbol(string(c) * suf)
-        df_out[!, newname] = zcol
+        df_out[!, Symbol(string(c))] = zcol
     end
 
     return df_out, scaler
+end
+
+
+function mean_and_std(df::DataFrame, cols::Vector{Symbol}, ddof::Int=1)
+    # ensure suffix is string and produce column names
+    scaler = Dict{Symbol, Tuple{Float64, Float64}}()
+
+    for c in cols
+        @assert hasproperty(df, c) "Column $(c) not found"
+
+        col = df[!, c]
+        # compute mean and std ignoring missing
+        vals = collect(skipmissing(col))
+        if isempty(vals)
+            μ = NaN
+            σ = NaN
+        else
+            μ = mean(vals)
+            σ = std(vals; corrected = (ddof==1))
+            # guard against zero std
+            if σ == 0.0 || isnan(σ)
+                σ = 1.0
+            end
+        end
+
+        scaler[c] = (μ, σ)
+    end
+
+    return scaler
 end

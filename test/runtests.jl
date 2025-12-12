@@ -114,7 +114,7 @@ import automated_trading_test_environment  as ATTE# Import your package
             OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol5day][t], 
             
             # Realized Volatility calculated on the fly
-            sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][t-T+1:t].^2)/T*252), 
+            sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][(t-T):(t-1)].^2)/T*252), 
             
             # Use an absolute tolerance (atol) to handle small floating-point discrepancies
             atol=1e-8 
@@ -135,7 +135,7 @@ import automated_trading_test_environment  as ATTE# Import your package
             OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol10day][t], 
             
             # Realized Volatility calculated on the fly
-            sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][t-T+1:t].^2)/T*252), 
+            sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][(t-T):(t-1)].^2)/T*252), 
             
             # Use an absolute tolerance (atol) to handle small floating-point discrepancies
             atol=1e-8 
@@ -156,7 +156,7 @@ import automated_trading_test_environment  as ATTE# Import your package
             OHLCVT["ETHUSD"]["1440"]["df"][!,:realVol21day][t], 
             
             # Realized Volatility calculated on the fly
-            sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][t-T+1:t].^2)/T*252), 
+            sqrt(sum(OHLCVT["ETHUSD"]["1440"]["df"][!,:lnReturn1day][(t-T):(t-1)].^2)/T*252), 
             
             # Use an absolute tolerance (atol) to handle small floating-point discrepancies
             atol=1e-8 
@@ -215,13 +215,15 @@ import automated_trading_test_environment  as ATTE# Import your package
     println("Testing 21 day Volatility of Volatility...")
     for (t,T) in [(69,21),(149,21),(1512,21),(2289,21),(3519,21)]
         vol=ATTE.daily_realized_volatility(OHLCVT["ETHUSD"]["1440"]["df"][!,:close],1)
-        vov=ATTE.daily_realized_volatility(vol,T)
+        window = skipmissing(vol[(t - T + 1):t])
+        vov = ATTE.std(collect(window))
+        
         result=isapprox(
             # Actual pre-calculated Volatility of Volatility
             OHLCVT["ETHUSD"]["1440"]["df"][!,:volOfVol21day][t], 
             
             # Volatility of Volatility calculated on the fly
-            vov[t], 
+            vov, 
             
             # Use an absolute tolerance (atol) to handle small floating-point discrepancies
             atol=1e-8 
