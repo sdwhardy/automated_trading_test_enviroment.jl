@@ -62,10 +62,40 @@ function calculate_clustering_indicators(df)
 end
 
 """
-    logreturn(prices, n::Int=1)
+    logreturn(prices::AbstractVector, n::Int=1)
 
-Compute n-period log returns for a vector of prices.
-Returns a vector of length `length(prices) - n`.
+Compute the *n-period logarithmic return* of a price series.
+
+The logarithmic return at time `t` is defined as the natural logarithm
+of the ratio between the current price and the price `n` periods earlier.
+
+Missing values are returned for the first `n` observations, as the return
+cannot be computed due to insufficient historical data.
+
+# Arguments
+- `prices::AbstractVector`:
+  Vector of strictly positive asset prices ordered in time.
+- `n::Int=1`:
+  Return horizon (number of periods). Must satisfy `n ≥ 1`.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Logarithmic returns of the same length as `prices`, with `missing`
+  values in positions `1:n`.
+
+# Definition
+For t > n:
+
+r_t = ln(P_t / P_(t - n))
+
+Notes:
+
+Log-returns are time-additive and commonly used in financial modeling.
+
+Prices must be strictly positive.
+
+Setting n > 1 computes multi-period log-returns.
+
 """
 function logreturn(prices::AbstractVector, n::Int=1)
     N = length(prices)
@@ -80,10 +110,38 @@ function logreturn(prices::AbstractVector, n::Int=1)
 end
 
 """
-    roc_df(prices::AbstractVector, n::Int=1)
+    roc(prices::AbstractVector, n::Int=1)
 
-Compute n-period Rate of Change (ROC) as a DataFrame column aligned with `prices`.
-First `n` entries are `missing`.
+Compute the *n-period Rate of Change (ROC)* of a price series.
+
+The ROC measures the relative change in price over a specified number
+of periods. It is expressed as a fraction of the price `n` periods ago.
+
+Missing values are returned for the first `n` observations, since the
+ROC cannot be computed without sufficient historical data.
+
+# Arguments
+- `prices::AbstractVector`:
+  Vector of asset prices ordered in time.
+- `n::Int=1`:
+  Return horizon (number of periods). Must satisfy `n ≥ 1`.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Rate of Change series of the same length as `prices`, with `missing`
+  values in positions `1:n`.
+
+# Definition
+For t > n:
+
+ROC_t = (P_t - P_(t - n)) / P_(t - n)
+
+Notes
+ROC is a simple momentum indicator commonly used in technical analysis.
+
+Values can be positive (price increase) or negative (price decrease).
+
+Setting n > 1 computes multi-period ROC.
 """
 function roc(prices::AbstractVector, n::Int=1)
     N = length(prices)
@@ -98,10 +156,38 @@ function roc(prices::AbstractVector, n::Int=1)
 end
 
 """
-    daily_realized_vol_df(prices::AbstractVector, n::Int=21)
+    daily_realized_volatility(prices::AbstractVector, n::Int=21)
 
-Compute n-period rolling realized volatility (standard deviation of log returns) as a DataFrame column aligned with `prices`.
-First `n` entries are `missing`.
+Compute the *daily realized volatility* using a rolling window of
+logarithmic returns.
+
+The realized volatility at time `t` is defined as the square root of the
+average of squared daily log-returns over the previous `n` periods.
+Missing values are returned for the first `n` observations.
+
+# Arguments
+- `prices::AbstractVector`:
+  Vector of strictly positive asset prices ordered in time.
+- `n::Int=21`:
+  Lookback window size (typically 21 trading days ≈ one month).
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Daily realized volatility series with `missing` values in positions `1:n`.
+
+# Definition
+Let r_t denote the one-period log-return:
+
+r_t = ln(P_t / P_{t-1})
+
+For t > n, the realized volatility is defined as:
+
+σ_t = sqrt((1 / n) * sum(r_{t-i}^2)),  for i = 1, …, n
+
+# Notes
+- This is a non-parametric volatility estimator.
+- It assumes zero mean returns over the window.
+- Often used as a proxy for latent volatility in financial models.
 """
 function daily_realized_volatility(prices::AbstractVector, n::Int=21)
     N = length(prices)
@@ -122,10 +208,38 @@ end
 
 
 """
-    annualized_realized_vol_df(prices::AbstractVector, n::Int=21)
+    annualized_realized_volatility(prices::AbstractVector, n::Int=21)
 
-Compute n-period rolling realized volatility (standard deviation of log returns) as a DataFrame column aligned with `prices`.
-First `n` entries are `missing`.
+Compute the *annualized realized volatility* from daily log returns.
+
+This function scales the daily realized volatility by the square root
+of the number of trading periods per year, assuming independent and
+identically distributed daily returns.
+
+Missing values are returned for the first `n` observations.
+
+# Arguments
+- `prices::AbstractVector`:
+  Vector of strictly positive asset prices ordered in time.
+- `n::Int=21`:
+  Lookback window size used to compute daily realized volatility.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Annualized realized volatility series.
+
+# Definition
+Let σ_t^d denote the daily realized volatility computed over the past
+`n` days. The annualized realized volatility is defined as:
+
+σ_t = sqrt(A) * σ_t^d
+
+where A is the number of trading periods per year (typically A = 252).
+
+# Notes
+- Assumes no serial correlation in daily returns.
+- Annualization is performed after volatility (not variance) estimation.
+- Widely used for comparability across assets and horizons.
 """
 function annualized_realized_volatility(prices::AbstractVector, n::Int=21)
     
@@ -134,22 +248,59 @@ function annualized_realized_volatility(prices::AbstractVector, n::Int=21)
 end
 
 """
-    gk_volatility(open, high, low, close, n=21; annualization_factor=252.0)
+    gk_volatility(
+        open::AbstractVector,
+        high::AbstractVector,
+        low::AbstractVector,
+        close::AbstractVector,
+        n::Int=21;
+        annualization_factor::Float64=252.0
+    )
 
-Calculates the rolling Garman-Klass Volatility, which is an estimator of 
-volatility that incorporates open, high, low, and close prices.
+Compute the rolling *Garman–Klass (GK) volatility estimator* using OHLC data.
 
-The function calculates the daily Garman-Klass variance, averages it over 
-a rolling window of 'n' periods, takes the square root, and annualizes the result.
+The Garman–Klass estimator is an efficient, non-parametric volatility
+measure that exploits the daily high–low price range while correcting
+for opening and closing price drift. The estimator is first computed
+as a daily variance contribution, then averaged over a rolling window
+and annualized.
 
-Arguments:
-- `open`, `high`, `low`, `close`: AbstractVectors of price data (must be the same length).
-- `n`: The look-back period for the rolling window (default is 21 trading days/periods).
-- `annualization_factor`: Factor used to annualize the daily volatility (default 252.0).
+Missing values are returned for the first `n` observations.
 
-Returns:
-- A Vector{Union{Float64, Missing}} containing the annualized Garman-Klass volatility.
-  The first 'n' elements will be 'missing' as there is not enough data.
+# Arguments
+- `open::AbstractVector`:
+  Opening prices.
+- `high::AbstractVector`:
+  High prices.
+- `low::AbstractVector`:
+  Low prices.
+- `close::AbstractVector`:
+  Closing prices.
+- `n::Int=21`:
+  Lookback window length (typically 21 trading days).
+- `annualization_factor::Float64=252.0`:
+  Scaling factor to annualize volatility.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Annualized Garman–Klass volatility series.
+
+# Definition
+Let O_t, H_t, L_t, and C_t denote the open, high, low, and close prices.
+The daily Garman–Klass *variance* is defined as:
+
+v_t = 0.5 * ln(H_t / L_t)^2 - (2 * ln(2) - 1) * ln(C_t / O_t)^2
+
+For t > n, the rolling annualized volatility is:
+
+σ_t = sqrt(A * (1 / n) * sum(v_{t-i})),  for i = 1, …, n
+
+where A is the annualization factor.
+
+# Notes
+- Variance (not volatility) is averaged over time.
+- Assumes zero overnight drift.
+- More efficient than close-to-close volatility under ideal conditions.
 """
 function gk_volatility(
     open::AbstractVector, 
@@ -208,11 +359,41 @@ function gk_volatility(
 end
 
 """
-    vol_of_vol_df(prices::AbstractVector, vol_window::Int=21, vov_window::Int=21)
+    vol_of_vol(prices::AbstractVector, vol_window::Int=1, vov_window::Int=21)
 
-Compute Vol-of-Vol (rolling std of realized volatility) and return a DataFrame aligned with `prices`.
-- vol_window: window for realized volatility
-- vov_window: window for Vol-of-Vol
+Compute the *volatility of volatility* (VoV) from realized volatility.
+
+This function first computes daily realized volatility using a rolling
+window of length `vol_window`, then estimates the volatility of that
+volatility as the standard deviation of realized volatility over a
+second rolling window of length `vov_window`.
+
+Missing values are returned for periods where insufficient data is
+available.
+
+# Arguments
+- `prices::AbstractVector`:
+  Vector of strictly positive asset prices ordered in time.
+- `vol_window::Int=1`:
+  Lookback window used to compute daily realized volatility.
+- `vov_window::Int=21`:
+  Lookback window used to compute volatility of volatility.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Volatility-of-volatility time series.
+
+# Definition
+Let σ_t^d denote daily realized volatility computed over `vol_window`
+periods. The volatility of volatility is defined as the rolling standard
+deviation of σ_t^d over `vov_window` observations:
+
+v_t = std(σ_{t-i}^d),  for i = 0, …, vov_window - 1
+
+# Notes
+- Measures variability of volatility rather than price returns.
+- Often interpreted as a proxy for volatility regime instability.
+- Used in risk management, volatility forecasting, and option pricing.
 """
 function vol_of_vol(prices::AbstractVector, vol_window::Int=1, vov_window::Int=21)
     
@@ -234,8 +415,43 @@ end
 """
     ma_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
 
-Compute moving average difference: MA(short_n) - MA(long_n)
-Returns a DataFrame aligned with `prices`.
+Compute the *moving average difference* (MA difference) indicator.
+
+This indicator measures the difference between a short-term and a
+long-term simple moving average of prices. It is commonly used to
+identify trend direction and momentum by comparing recent price behavior
+to longer-term trends.
+
+Missing values are returned until both moving averages are defined.
+
+# Arguments
+- `prices::AbstractVector`:
+  Vector of asset prices ordered in time.
+- `short_n::Int=10`:
+  Window length of the short-term moving average.
+- `long_n::Int=50`:
+  Window length of the long-term moving average. Must satisfy
+  `short_n < long_n`.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Time series of moving average differences.
+
+# Definition
+Let S_t denote the short-term moving average and L_t the long-term moving
+average:
+
+S_t = (1 / short_n) * sum(P_{t-i}),  i = 0, …, short_n - 1  
+L_t = (1 / long_n)  * sum(P_{t-i}),  i = 0, …, long_n  - 1  
+
+The moving average difference is then defined as:
+
+D_t = S_t - L_t
+
+# Notes
+- Positive values indicate upward momentum.
+- Negative values indicate downward momentum.
+- Closely related to trend-following and crossover strategies.
 """
 function ma_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
     N = length(prices)
@@ -279,8 +495,46 @@ function simple_std(arr::AbstractVector)
     return sqrt(sum((arr .- simple_mean(arr)).^2) / (n - 1))
 end
 
-# --- 1. PROPERLY IMPLEMENTED VOLUME Z-SCORE FUNCTION ---
+"""
+    volume_zscore(volume::AbstractVector, n::Int)
 
+Compute the *volume z-score* over a rolling window.
+
+This indicator standardizes the current trading volume relative to its
+recent historical distribution by subtracting the rolling mean and
+dividing by the rolling standard deviation. It measures how unusual
+current volume is compared to recent activity.
+
+Missing values are returned for the first `n` observations.
+
+# Arguments
+- `volume::AbstractVector`:
+  Vector of traded volumes ordered in time.
+- `n::Int`:
+  Lookback window length used to compute the rolling mean and standard deviation.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Volume z-score time series.
+
+# Definition
+Let V_t denote trading volume at time t. Define the rolling mean μ_t and
+standard deviation σ_t over the previous n observations:
+
+μ_t = (1 / n) * sum(V_{t-i})  
+σ_t = std(V_{t-i}),   i = 1, …, n
+
+The volume z-score is then defined as:
+
+Z_t = (V_t - μ_t) / σ_t
+
+If σ_t is numerically zero, the z-score is set to zero.
+
+# Notes
+- Highlights unusually high or low trading activity.
+- Commonly used to detect breakouts, accumulation, or distribution.
+- Assumes volume observations are approximately stationary over the window.
+"""
 function volume_zscore(volume::AbstractVector, n::Int)
     N = length(volume)
 
@@ -306,11 +560,46 @@ end
 """
     amihud(prices::AbstractVector, volume::AbstractVector, n::Int=21)
 
-Compute n-period rolling Amihud Illiquidity Ratio.
-Returns a DataFrame aligned with the original price vector.
-- prices: daily close prices
-- volume: daily volumes (number of shares)
-- n: rolling window
+Compute the *Amihud illiquidity measure* using price and volume data.
+
+The Amihud illiquidity indicator measures the price impact of trading by
+relating absolute returns to traded dollar volume. Higher values indicate
+lower market liquidity, as small trading volumes are associated with
+larger price movements.
+
+Missing values are returned for the first `n` observations.
+
+# Arguments
+- `prices::AbstractVector`:
+  Vector of asset prices ordered in time.
+- `volume::AbstractVector`:
+  Vector of traded volumes ordered in time.
+- `n::Int=21`:
+  Lookback window length used to compute rolling illiquidity.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`:
+  Amihud illiquidity time series.
+
+# Definition
+Let P_t denote the asset price and V_t the traded volume at time t.
+Define the daily return magnitude and dollar volume as:
+
+R_t = |P_t - P_{t-1}| / P_{t-1}  
+DV_t = P_t * V_t
+
+The daily illiquidity contribution is
+
+I_t = R_t / DV_t
+
+For t > n, the Amihud illiquidity measure is the rolling mean:
+
+A_t = (1 / n) * sum(I_{t-i}),  for i = 1, …, n
+
+# Notes
+- Captures price impact per unit of trading volume.
+- Higher values indicate lower liquidity.
+- Widely used in empirical asset pricing and market microstructure.
 """
 function amihud(prices::AbstractVector, volume::AbstractVector, n::Int=21)
     N = length(prices)
@@ -341,21 +630,48 @@ function signed_log(x)
     return sign(x) * log1p(abs(x))
 end
 
-
 """
-    zscore_df(df::DataFrame, cols::Vector{Symbol};
-              suffix::AbstractString = :_z,
-              ddof::Int = 1)
+    zscore_df(df::DataFrame, cols::Vector{Symbol}, ddof::Int=1)
 
-Standardize columns `cols` in `df` using z-score (mean/std) while ignoring `missing`.
-Returns a tuple `(df_out, scaler)` where:
-- `df_out` is a DataFrame with new columns named `col * suffix` containing z-scores (type `Union{Float64,Missing}`).
-- `scaler` is a Dict{Symbol, Tuple{Float64, Float64}} mapping each column => (mean, std).
+Standardize selected DataFrame columns using z-score normalization.
 
-Parameters:
-- `cols`: vector of column Symbols to standardize.
-- `suffix`: suffix appended to original column name (default `:_z` -> `:feature_z`).
-- `ddof`: delta degrees of freedom for std (1 for sample std).
+For each column in `cols`, this function computes the mean and standard
+deviation (ignoring missing values) and rescales the data to have zero
+mean and unit variance. Missing values are preserved. The function
+returns both the standardized DataFrame and the fitted scaling
+parameters.
+
+# Arguments
+- `df::DataFrame`:
+  Input DataFrame containing the data.
+- `cols::Vector{Symbol}`:
+  Columns to be standardized.
+- `ddof::Int=1`:
+  Degrees of freedom used in the standard deviation.
+  If `ddof == 1`, the sample standard deviation is used.
+  If `ddof == 0`, the population standard deviation is used.
+
+# Returns
+- `df_out::DataFrame`:
+  Copy of the input DataFrame with standardized columns.
+- `scaler::Dict{Symbol, Tuple{Float64, Float64}}`:
+  Dictionary mapping each column to its `(mean, std)` used for scaling.
+
+# Definition
+Let X_{i,c} denote the value of column c at row i. For each column c,
+the standardized value is defined as
+
+Z_{i,c} = (X_{i,c} - μ_c) / σ_c
+
+where μ_c and σ_c are the mean and standard deviation of column c,
+computed ignoring missing values.
+
+If σ_c is zero or undefined, it is replaced by 1 to avoid division by zero.
+
+# Notes
+- Standardization is performed column-wise.
+- Scaling parameters are reusable for out-of-sample data.
+- Commonly used as preprocessing for clustering and regression models.
 """
 function zscore_df(df::DataFrame, cols::Vector{Symbol}, ddof::Int=1)
     # ensure suffix is string and produce column names
