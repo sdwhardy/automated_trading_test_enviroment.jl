@@ -1,6 +1,5 @@
 
-
-function PCA(df::DataFrame, feature_cols::Vector{Symbol}; percent_explained::Float64=0.95)
+function PCA(df::DataFrame, feature_cols::Vector{Symbol})
 
 
     # ----------------------------
@@ -35,6 +34,12 @@ function PCA(df::DataFrame, feature_cols::Vector{Symbol}; percent_explained::Flo
     #  PC scores with sorted eigenvectors
     PC_scores_sorted = X_centered * eigvecs_sorted
 
+
+    return Dict("pca_df"=>PC_scores_sorted, "eigen_values"=>eigvals_sorted, "eigen_vectors"=>eigvecs_sorted, "nonmissing_idx"=>nonmissing_idx, "X_centered"=>X_centered)
+
+end
+
+function percent_explained_PCA(PC_scores_sorted,eigvals_sorted, nonmissing_idx; percent_explained::Float64=0.95)
     # ----------------------------
     # 4. Optional: Variance explained by each PC
     # ----------------------------
@@ -57,10 +62,5 @@ function PCA(df::DataFrame, feature_cols::Vector{Symbol}; percent_explained::Flo
     # Add row index mapping to original DataFrame
     df_pca[!,:row_idx] = nonmissing_idx
 
-    return Dict("pca_df"=>df_pca, "eigen_values"=>eigvals_sorted, "eigen_vectors"=>eigvecs_sorted)
-
+    return df_pca
 end
-
-
-
-

@@ -1,9 +1,4 @@
-using CSV, DataFrames, Dates, TimeZones, Statistics, LinearAlgebra
-
-include("clusteringIndicators.jl")
-include("data.jl")
-include("feature_validation.jl")
-include("PCA.jl")
+import automated_trading_test_environment as ATTE
 
 #Open - the first traded price
 #High - the highest traded price
@@ -23,17 +18,17 @@ include("PCA.jl")
 OHLCVT=Dict()
 pair="XBTUSD"
 interval="1440"
-push!(OHLCVT,pair=>Dict(interval=>Dict("df"=>get_pair_interval_df(pair,interval),"dict"=>Dict())))
+push!(OHLCVT,pair=>Dict(interval=>Dict("df"=>ATTE.get_pair_interval_df(pair,interval),"dict"=>Dict())))
 
 #=ts = OHLCVT["XBTUSD"]["1440"]["df"][!,:timestamp][1]
 dt = unix2datetime(ts)
 dt_be = ZonedDateTime(dt, tz"Europe/Brussels")
 println(dt_be)=#
 
-OHLCVT["XBTUSD"]["1440"]["df"]=calculate_clustering_indicators(OHLCVT["XBTUSD"]["1440"]["df"])
+OHLCVT["XBTUSD"]["1440"]["df"]=ATTE.calculate_clustering_indicators(OHLCVT["XBTUSD"]["1440"]["df"])
 
 exclude = [:timestamp, :open, :high, :low, :close, :volume, :trades]
-cols = Symbol.(names(OHLCVT["XBTUSD"]["1440"]["df"], Not(exclude)))
+cols = Symbol.(names(OHLCVT["XBTUSD"]["1440"]["df"], ATTE.Not(exclude)))
 
 #=for col in cols
     _mn=minimum(collect(skipmissing(OHLCVT["XBTUSD"]["1440"]["df"][!,col])))
@@ -42,16 +37,15 @@ cols = Symbol.(names(OHLCVT["XBTUSD"]["1440"]["df"], Not(exclude)))
 end=#
 
 #=Z score Normalization Transform=#
-OHLCVT["XBTUSD"]["1440"]["df"][!,:roc21day] .= signed_log.(OHLCVT["XBTUSD"]["1440"]["df"][!,:roc21day])
-OHLCVT["XBTUSD"]["1440"]["df"][!,:roc63day] .= signed_log.(OHLCVT["XBTUSD"]["1440"]["df"][!,:roc63day])
+OHLCVT["XBTUSD"]["1440"]["df"][!,:roc21day] .= ATTE.signed_log.(OHLCVT["XBTUSD"]["1440"]["df"][!,:roc21day])
+OHLCVT["XBTUSD"]["1440"]["df"][!,:roc63day] .= ATTE.signed_log.(OHLCVT["XBTUSD"]["1440"]["df"][!,:roc63day])
 OHLCVT["XBTUSD"]["1440"]["df"][!,:amihud21day]=log.(1.0 .+ OHLCVT["XBTUSD"]["1440"]["df"][!,:amihud21day])
 
 exclude = [:timestamp, :open, :high, :low, :close, :volume, :trades, :volumeZscore21day]
-cols = Symbol.(names(OHLCVT["XBTUSD"]["1440"]["df"], Not(exclude)))
-OHLCVT["XBTUSD"]["1440"]["df"], OHLCVT["XBTUSD"]["1440"]["dict"]=zscore_df(OHLCVT["XBTUSD"]["1440"]["df"],cols)
-OHLCVT["XBTUSD"]["1440"]["dict"]=mean_and_std(OHLCVT["XBTUSD"]["1440"]["df"], cols)
+cols = Symbol.(names(OHLCVT["XBTUSD"]["1440"]["df"], ATTE.Not(exclude)))
+OHLCVT["XBTUSD"]["1440"]["df"], OHLCVT["XBTUSD"]["1440"]["dict"]=ATTE.zscore_df(OHLCVT["XBTUSD"]["1440"]["df"],cols)
+OHLCVT["XBTUSD"]["1440"]["dict"]=ATTE.mean_and_std(OHLCVT["XBTUSD"]["1440"]["df"], cols)
 
-results=validate_features(OHLCVT["XBTUSD"]["1440"]["df"])
 
 
 # ----------------------------
@@ -74,50 +68,10 @@ feature_cols = [
     :amihud21day
 ]
 
+results=ATTE.validate_features(OHLCVT["XBTUSD"]["1440"]["df"], feature_cols)
 
-pca_dict=PCA(OHLCVT["XBTUSD"]["1440"]["df"], feature_cols)
+pca_dict=ATTE.PCA(OHLCVT["XBTUSD"]["1440"]["df"], feature_cols)
 
-#=validation
-The mean should be within [-0.05, +0.05]
-The std should be within [0.98, 1.02]
-=#
+df_pca = ATTE.percent_explained_PCA(pca_dict["pca_df"],pca_dict["eigen_values"], pca_dict["nonmissing_idx"])
 
-#################################################################################################################
-#################################### ETH ########################################################################
-#################################################################################################################
-
-OHLCVT=Dict()
-pair="ETHUSD"
-interval="1440"
-push!(OHLCVT,pair=>Dict(interval=>Dict("df"=>get_pair_interval_df(pair,interval),"dict"=>Dict())))
-
-#=ts = OHLCVT["ETHUSD"]["1440"]["df"][!,:timestamp][1]
-dt = unix2datetime(ts)
-dt_be = ZonedDateTime(dt, tz"Europe/Brussels")
-println(dt_be)=#
-
-OHLCVT["ETHUSD"]["1440"]["df"]=calculate_clustering_indicators(OHLCVT["ETHUSD"]["1440"]["df"])
-
-exclude = [:timestamp, :open, :high, :low, :close, :volume, :trades]
-cols = Symbol.(names(OHLCVT["ETHUSD"]["1440"]["df"], Not(exclude)))
-
-for col in cols
-    _mn=minimum(collect(skipmissing(OHLCVT["ETHUSD"]["1440"]["df"][!,col])))
-    _mx=maximum(collect(skipmissing(OHLCVT["ETHUSD"]["1440"]["df"][!,col])))
-    println("Range of ", col, " is: ", _mn, " - ", _mx)
-end
-
-#=Z score Normalization Transform 
-Amihud illiquidity → log(1 + amihud)
-Volatility and vol-of-vol:
-stabilized with → log(vol) then z-score
-remainder z score directly=#
-
-OHLCVT["ETHUSD"]["1440"]["df"][!,:roc21day] .= signed_log.(OHLCVT["ETHUSD"]["1440"]["df"][!,:roc21day])
-OHLCVT["ETHUSD"]["1440"]["df"][!,:roc63day] .= signed_log.(OHLCVT["ETHUSD"]["1440"]["df"][!,:roc63day])
-OHLCVT["ETHUSD"]["1440"]["df"][!,:amihud21day]=log.(1.0 .+ OHLCVT["ETHUSD"]["1440"]["df"][!,:amihud21day])
-
-exclude = [:timestamp, :open, :high, :low, :close, :volume, :trades, :volumeZscore21day]
-cols = Symbol.(names(OHLCVT["ETHUSD"]["1440"]["df"], Not(exclude)))
-OHLCVT["ETHUSD"]["1440"]["df"],OHLCVT["ETHUSD"]["1440"]["dict"]=zscore_df(OHLCVT["ETHUSD"]["1440"]["df"],cols)
-OHLCVT["ETHUSD"]["1440"]["dict"]=mean_and_std(OHLCVT["ETHUSD"]["1440"]["df"], cols)
+#NOTE - organize and explain PCA in typst

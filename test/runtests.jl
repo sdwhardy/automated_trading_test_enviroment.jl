@@ -414,20 +414,19 @@ import automated_trading_test_environment  as ATTE# Import your package
     # ----------------------------
     # 3. Variance of PC scores = eigenvalues
     # ----------------------------
-    #=pc_vars = vec(var(pca_dict["eigen_vectors"]; dims=1))
-    check3 = norm(pc_vars - eigvals_sorted, Inf) < tol
+    pc_vars = ATTE.vec(ATTE.var(pca_dict["pca_df"]; dims=1))
+    check3 = ATTE.norm(pc_vars - pca_dict["eigen_values"], Inf) < tol
     println("3. PC variances match eigenvalues: ", check3)
     @test check3==true
-
     # ----------------------------
     # 4. Reconstruction error
     # ----------------------------
-    X_reconstructed = PC_scores_sorted * eigvecs_sorted'
-    recon_error = norm(X_reconstructed - X_centered, Inf)
+    X_reconstructed = pca_dict["pca_df"] * pca_dict["eigen_vectors"]'
+    recon_error = ATTE.norm(X_reconstructed - pca_dict["X_centered"], Inf)
 
     println("\nMax reconstruction error = ", recon_error)
     check4 = recon_error < tol
     println("4. Reconstruction accurate: ", check4)
-    @test check4==true=#
+    @test check4==true
 
 end
