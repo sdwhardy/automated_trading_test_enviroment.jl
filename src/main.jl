@@ -1,7 +1,9 @@
-using CSV, DataFrames, Dates, TimeZones, Statistics
+using CSV, DataFrames, Dates, TimeZones, Statistics, LinearAlgebra
+
 include("clusteringIndicators.jl")
 include("data.jl")
 include("feature_validation.jl")
+include("PCA.jl")
 
 #Open - the first traded price
 #High - the highest traded price
@@ -51,6 +53,29 @@ OHLCVT["XBTUSD"]["1440"]["dict"]=mean_and_std(OHLCVT["XBTUSD"]["1440"]["df"], co
 
 results=validate_features(OHLCVT["XBTUSD"]["1440"]["df"])
 
+
+# ----------------------------
+# 1. Define your feature columns
+# ----------------------------
+feature_cols = [
+    :lnReturn1day,
+    :lnReturn5day,
+    :lnReturn21day,
+    :roc21day,
+    :roc63day,
+    :realVol5day,
+    :realVol10day,
+    :realVol21day,
+    :gkVol21day,
+    :volOfVol21day,
+    :maDiff10_50day,
+    :maDiff20_100day,
+    :volumeZscore21day,
+    :amihud21day
+]
+
+
+pca_dict=PCA(OHLCVT["XBTUSD"]["1440"]["df"], feature_cols)
 
 #=validation
 The mean should be within [-0.05, +0.05]

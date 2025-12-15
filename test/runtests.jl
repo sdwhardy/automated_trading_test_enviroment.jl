@@ -333,4 +333,101 @@ import automated_trading_test_environment  as ATTE# Import your package
         end
     end
 
+    println("Testing Normalization...")
+    OHLCVT["ETHUSD"]["1440"]["df"][!,:roc21day] .= ATTE.signed_log.(OHLCVT["ETHUSD"]["1440"]["df"][!,:roc21day])
+    OHLCVT["ETHUSD"]["1440"]["df"][!,:roc63day] .= ATTE.signed_log.(OHLCVT["ETHUSD"]["1440"]["df"][!,:roc63day])
+    OHLCVT["ETHUSD"]["1440"]["df"][!,:amihud21day]=log.(1.0 .+ OHLCVT["ETHUSD"]["1440"]["df"][!,:amihud21day])
+
+    exclude = [:timestamp, :open, :high, :low, :close, :volume, :trades, :volumeZscore21day]
+    cols = Symbol.(names(OHLCVT["ETHUSD"]["1440"]["df"], ATTE.Not(exclude)))
+    OHLCVT["ETHUSD"]["1440"]["df"], OHLCVT["ETHUSD"]["1440"]["dict"]=ATTE.zscore_df(OHLCVT["ETHUSD"]["1440"]["df"],cols)
+    OHLCVT["ETHUSD"]["1440"]["dict"]=ATTE.mean_and_std(OHLCVT["ETHUSD"]["1440"]["df"], cols)
+
+    results=ATTE.validate_features(OHLCVT["ETHUSD"]["1440"]["df"],cols)
+
+    if (all(results[!,:mean_ok])==true)
+            println("Mean check passed.")
+            @test true==true
+    else
+        println("Mean check failed.")
+        @test true==false
+    end
+
+    if (all(results[!,:std_ok])==true)
+            println("Standard deviation check passed.")
+            @test true==true
+    else
+        println("Standard deviation check failed.")
+        @test true==false
+    end
+
+    
+    if (all(results[!,:aligned])==true)
+            println("Alignment check passed.")
+            @test true==true
+    else
+        println("Alignment check failed.")
+        @test true==false
+    end
+
+    ###########################################
+    println("Testing Principle Component Analysis (PCA)...")
+    feature_cols = [
+        :lnReturn1day,
+        :lnReturn5day,
+        :lnReturn21day,
+        :roc21day,
+        :roc63day,
+        :realVol5day,
+        :realVol10day,
+        :realVol21day,
+        :gkVol21day,
+        :volOfVol21day,
+        :maDiff10_50day,
+        :maDiff20_100day,
+        :volumeZscore21day,
+        :amihud21day
+    ]
+
+
+    pca_dict=ATTE.PCA(OHLCVT["ETHUSD"]["1440"]["df"], feature_cols)
+
+    tol = 1e-8
+
+    println("PCA validation checks:")
+
+    # ----------------------------
+    # 1. Eigenvalues non-negative
+    # ----------------------------
+    check1 = minimum(pca_dict["eigen_values"]) ≥ -tol
+    println("1. Eigenvalues non-negative: ", check1)
+    @test check1==true
+
+    # ----------------------------
+    # 2. Eigenvectors orthonormal
+    # ----------------------------
+    I_approx = pca_dict["eigen_vectors"]' * pca_dict["eigen_vectors"]
+    check2 = ATTE.norm(I_approx - ATTE.I, Inf) < tol
+    println("2. Eigenvectors orthonormal: ", check2)
+    @test check2==true
+
+    # ----------------------------
+    # 3. Variance of PC scores = eigenvalues
+    # ----------------------------
+    #=pc_vars = vec(var(pca_dict["eigen_vectors"]; dims=1))
+    check3 = norm(pc_vars - eigvals_sorted, Inf) < tol
+    println("3. PC variances match eigenvalues: ", check3)
+    @test check3==true
+
+    # ----------------------------
+    # 4. Reconstruction error
+    # ----------------------------
+    X_reconstructed = PC_scores_sorted * eigvecs_sorted'
+    recon_error = norm(X_reconstructed - X_centered, Inf)
+
+    println("\nMax reconstruction error = ", recon_error)
+    check4 = recon_error < tol
+    println("4. Reconstruction accurate: ", check4)
+    @test check4==true=#
+
 end

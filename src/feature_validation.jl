@@ -16,7 +16,7 @@ Checks:
 Returns:
   A DataFrame summary of pass/fail per feature.
 """
-function validate_features(df::DataFrame; std_tol=1e-3, mean_tol=1e-3)
+function validate_features(df::DataFrame, cols::Vector{Symbol}; std_tol=1e-3, mean_tol=1e-3)
 
     results = DataFrame(
         feature = String[],
@@ -28,7 +28,7 @@ function validate_features(df::DataFrame; std_tol=1e-3, mean_tol=1e-3)
         aligned  = Bool[]
     )
 
-    for col in names(df)
+    for col in cols
         x = df[!, col]
         clean = skipmissing(x) |> collect
 

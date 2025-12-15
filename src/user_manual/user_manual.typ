@@ -211,8 +211,86 @@ $ A_t = (1 / n) dot sum(I_{t-i}), quad i = 1, dots, n $
 
 Higher values of $A_t$ indicate lower liquidity, as prices react more
 strongly to a given level of trading activity.
+== Normalization
+=== Nonlinear Pre-Standardization Transforms
 
-=== Z-Score Standardization (DataFrame)
+Before applying Z-score standardization, selected variables are transformed
+to reduce skewness, stabilize variance, and limit the influence of extreme
+values. This improves numerical stability and interpretability prior to
+mean–variance scaling.
+
+=== Signed Logarithmic Transform (ROC)
+
+For rate-of-change features, a signed logarithmic transform is applied.
+
+Let $x$ denote a return value.
+
+Define $s(x)$ as the sign of $x$, taking values $1$ for positive $x$,
+$-1$ for negative $x$, and $0$ otherwise.
+
+The signed logarithmic transform is defined as
+
+$ f(x) = s(x) dot ln(1 + |x|) $
+
+This transform has the following properties:
+
+- Preserves the sign of the original return  
+- Compresses extreme positive and negative values symmetrically  
+- Behaves approximately linearly near zero  
+
+It is well suited for financial return series, which often exhibit heavy
+tails and outliers.
+
+In the implementation, this transform is applied to:
+
+- 21-day rate of change  
+- 63-day rate of change  
+
+Let $r_k$ denote a rate-of-change feature at horizon $k$. The transformed
+feature is given by
+
+$ r_k = s(r_k) dot ln(1 + abs(r_k)) $
+
+---
+
+=== Logarithmic Transform (Amihud Illiquidity)
+
+The Amihud illiquidity measure is strictly non-negative and typically
+right-skewed. A standard logarithmic compression is therefore applied.
+
+Let $a$ denote the Amihud illiquidity value. The transformed value is
+
+$ a = ln(1 + a) $
+
+Adding 1 ensures the transform is well-defined at zero and avoids numerical
+instability.
+
+---
+
+=== Interaction with Z-Score Standardization
+
+These nonlinear transforms are applied *prior* to Z-score standardization.
+Their purpose is not to enforce normality, but to produce distributions
+that are better behaved under mean–variance scaling.
+
+After transformation, Z-score standardization is applied as follows.
+
+Let $X_i$ denote an observation of a variable $x$, with average $mu_x$
+and standard deviation $sigma_x$. The standardized value is
+
+$ Z_i = (X_i - mu_x) / sigma_x $
+
+---
+
+This two-step process:
+
+- Reduces skewness and tail risk (log and signed-log transforms)  
+- Removes scale and location effects (Z-score standardization)  
+
+The result is a set of features that are more comparable across time and
+variables, while preserving relative structure and sign information.
+
+=== Z-Score Standardization
 
 Z-score standardization rescales data so that each variable has zero mean
 and unit variance. This transformation makes variables comparable across
@@ -235,7 +313,7 @@ is replaced by 1 to ensure numerical stability.
 Z-score standardization removes scale effects while preserving the
 relative structure of the data.
 
-=== Subsection
+== Principle Component Analysis
 Details of a specific part.
 
 == Results
