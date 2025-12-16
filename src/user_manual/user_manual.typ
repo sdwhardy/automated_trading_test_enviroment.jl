@@ -314,7 +314,85 @@ Z-score standardization removes scale effects while preserving the
 relative structure of the data.
 
 == Principle Component Analysis
-Details of a specific part.
+
+PCA is used to transform a set of correlated features into an orthogonal
+basis ordered by explained variance. In this pipeline, PCA is applied after
+Z-score normalization.
+
+=== 1. Missing-value filtering
+
+Let \( X \in \mathbb{R}^{N \times d} \) be the feature matrix.
+Rows containing any missing values are removed:
+
+Let $I$ be the set of row indices with no missing feature values.
+
+$ I = \{ i | ∀ j: X_(i,j) ≠ ⊥ \} $
+  
+The filtered matrix is:
+
+$ X_I $
+
+The PCA is performed only on $X_I$.
+
+=== 2. Centering
+
+Each feature is centered by subtracting its sample mean:
+
+$ X_c = X - 1 · mu^T $
+
+where
+
+$ mu = (1 / N) · ∑_(i=1)^N X_i $
+
+Even though features are already standardized, explicit centering ensures
+numerical stability.
+
+=== 3. Covariance matrix
+
+The sample covariance matrix is computed as:
+
+$ Sigma(j,k) = (1 / (N - 1)) · ∑_(i=1)^N X_c(i,j) · X_c(i,k) $
+
+This captures the linear dependence structure between features.
+
+=== 4. Eigen decomposition
+
+The covariance matrix is decomposed as:
+
+$ ∑_j Sigma(i,j) · v_k(j) = lambda_k · v_k(i) $
+
+where:
+- \( lambda_k \) are eigenvalues (explained variances),
+- \( v_k \) are orthonormal eigenvectors (principal directions).
+
+Eigenvalues are sorted in descending order:
+
+$ lambda_1 ≥ lambda_2 ≥ lambda_3 ≥ … ≥ lambda_d $
+
+=== 5. Projection onto principal components
+
+Principal component scores are obtained via:
+
+$
+Z = tilde{X} V
+$
+
+where \( V = [v_1, v_2, \dots, v_d] \).
+
+Each column of \( Z \) represents a principal component, with variance equal
+to its corresponding eigenvalue.
+
+=== 6. Properties
+
+- Principal components are uncorrelated
+- Total variance is preserved:
+
+$ ∑_(k=1)^d lambda_k = tr(Sigma) $
+
+- Reconstruction is possible via:
+
+
+$ tilde{X} ≈ Z · V^T $
 
 == Results
 Present results, figures, or tables.
@@ -329,5 +407,9 @@ Summarize findings and next steps.
 // References (optional)
 // ----------------------------
 == References
-- Reference 1
-- Reference 2
+
+- I. T. Jolliffe, *Principal Component Analysis*, Springer  
+  https://link.springer.com/book/10.1007/978-1-4757-1904-8
+- Bishop, *Pattern Recognition and Machine Learning*  
+  https://www.microsoft.com/en-us/research/people/cmbishop/prml-book/
+

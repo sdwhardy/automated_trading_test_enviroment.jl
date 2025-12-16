@@ -1,4 +1,45 @@
+"""
+    PCA(df::DataFrame, feature_cols::Vector{Symbol}) -> Dict{String, Any}
 
+Compute Principal Component Analysis (PCA) on a set of preprocessed features.
+
+This implementation assumes features are already **Z-score normalized**.
+Centering is still applied explicitly to ensure numerical robustness.
+
+### Steps
+1. **Missing-value filtering**
+   Rows containing any missing values in `feature_cols` are removed.
+   The indices of retained rows are preserved.
+
+2. **Centering**
+   Each feature column is centered by subtracting its sample mean.
+
+3. **Covariance-based PCA**
+   - Compute the sample covariance matrix of the centered data.
+   - Perform eigenvalue decomposition of the covariance matrix.
+   - Sort eigenvalues and eigenvectors in descending order.
+
+4. **Projection**
+   Project the centered data onto the ordered eigenvectors to obtain
+   principal component scores.
+
+### Returns
+A dictionary with the following keys:
+- `"pca_df"`          : Matrix of principal component scores
+- `"eigen_values"`   : Sorted eigenvalues (explained variances)
+- `"eigen_vectors"`  : Corresponding eigenvectors (principal directions)
+- `"nonmissing_idx"` : Row indices of observations used in PCA
+- `"X_centered"`     : Centered feature matrix used for decomposition
+
+### Notes
+- Eigenvalues correspond to the variance of each principal component.
+- Eigenvectors are orthonormal by construction.
+- Reconstruction is possible via `pca_df * eigen_vectors'`.
+
+### References
+- Jolliffe, I. T. *Principal Component Analysis*, Springer.
+  https://link.springer.com/book/10.1007/978-1-4757-1904-8
+"""
 function PCA(df::DataFrame, feature_cols::Vector{Symbol})
 
 
