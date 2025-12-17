@@ -37,7 +37,7 @@ import automated_trading_test_environment as ATTE
 
 
     # --------------------------------------------------------------------------------------------------
-    # 1) Log return validation
+    # 1a) Log return validation
     # --------------------------------------------------------------------------------------------------
 
     println("Testing 1 day log return...")
@@ -59,6 +59,34 @@ import automated_trading_test_environment as ATTE
             atol = 1e-8
         )
         println("$T day log returns step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
+    # --------------------------------------------------------------------------------------------------
+    # 1b) signed Log return validation
+    # --------------------------------------------------------------------------------------------------
+
+    println("Testing 1 day signed log return...")
+    for (t, T) in [(69,1), (149,1), (1512,1), (2289,1), (3519,1)]
+        sln=log(OHLCVT_ETH_DF[!, :close][t] / OHLCVT_ETH_DF[!, :close][t-T])
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :slnReturn1day][t],
+            sign(sln)*log(1+abs(sln)),
+            atol = 1e-8
+        )
+        println("$T day signed log returns step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
+    println("Testing 21 day signed log return...")
+    for (t, T) in [(69,21), (149,21), (1512,21), (2289,21), (3519,21)]
+        sln=log(OHLCVT_ETH_DF[!, :close][t] / OHLCVT_ETH_DF[!, :close][t-T])
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :slnReturn21day][t],
+            sign(sln)*log(1+abs(sln)),
+            atol = 1e-8
+        )
+        println("$T day signed log returns step $t ", result ? "passed." : "failed.")
         @test result == true
     end
 
@@ -179,6 +207,112 @@ import automated_trading_test_environment as ATTE
         @test result == true
     end
 
+    # --------------------------------------------------------------------------------------------------
+    # 6b) Short term slope
+    # --------------------------------------------------------------------------------------------------
+
+    println("Testing 3 day short term slope...")
+    for (t, n) in [(69,3), (149,3), (1512,3), (2289,3), (3519,3)]
+        indices = 0:(n-1)
+        mean_i = ATTE.mean(indices)
+        denom = sum((indices .- mean_i).^2)
+        window = OHLCVT_ETH_DF[!, :close][(t-n+1):t]
+        mean_x = ATTE.mean(window)
+        slope = sum((indices .- mean_i) .* (window .- mean_x)) / denom
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :stSlope3day][t],
+            slope,
+            atol = 1e-8
+        )
+        println("$n day short term slope step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
+    println("Testing 21 day short term slope...")
+    for (t, n) in [(69,21), (149,21), (1512,21), (2289,21), (3519,21)]
+        indices = 0:(n-1)
+        mean_i = ATTE.mean(indices)
+        denom = sum((indices .- mean_i).^2)
+        window = OHLCVT_ETH_DF[!, :close][(t-n+1):t]
+        mean_x = ATTE.mean(window)
+        slope = sum((indices .- mean_i) .* (window .- mean_x)) / denom
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :stSlope21day][t],
+            slope,
+            atol = 1e-8
+        )
+        println("$n day short term slope step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
+    # --------------------------------------------------------------------------------------------------
+    # 6c) EMA differentials
+    # --------------------------------------------------------------------------------------------------
+
+    println("Testing EMA 5–21 day difference...")
+    ema5 = ATTE.exma(OHLCVT_ETH_DF[!, :close], 5)
+    ema21 = ATTE.exma(OHLCVT_ETH_DF[!, :close], 21)
+
+    for t in (69, 149, 1512, 2289, 3519)
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :ema5MinusEma21][t],
+            ema5[t] - ema21[t],
+            atol = 1e-8
+        )
+        println("EMA 5-21 diff step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
+    println("Testing EMA 21–100 day difference...")
+    ema21  = ATTE.exma(OHLCVT_ETH_DF[!, :close], 21)
+    ema100 = ATTE.exma(OHLCVT_ETH_DF[!, :close], 100)
+
+    for t in (149, 433, 1512, 2289, 3519)
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :ema21MinusEma100][t],
+            ema21[t] - ema100[t],
+            atol = 1e-8
+        )
+        println("EMA 21–100 diff step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
+    # --------------------------------------------------------------------------------------------------
+    # 6d) EMA slope
+    # --------------------------------------------------------------------------------------------------
+
+    println("Testing 10 day EMA slope...")
+    ema10 = ATTE.exma(OHLCVT_ETH_DF[!, :close], 10)
+
+    for (t, n) in [(69,10), (149,10), (1512,10), (2289,10), (3519,10)]
+
+        slope =  (ema10[t] - ema10[t-1]) / ema10[t-1]
+
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :ema10daySlope][t],
+            slope,
+            atol = 1e-8
+        )
+        println("10 day EMA slope step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
+    println("Testing 21 day EMA slope...")
+    ema21 = ATTE.exma(OHLCVT_ETH_DF[!, :close], 21)
+
+    for (t, n) in [(69,21), (149,21), (1512,21), (2289,21), (3519,21)]
+        
+        slope =  (ema21[t] - ema21[t-1]) / ema21[t-1]
+
+        result = isapprox(
+            OHLCVT_ETH_DF[!, :ema21daySlope][t],
+            slope,
+            atol = 1e-8
+        )
+        println("21 day EMA slope step $t ", result ? "passed." : "failed.")
+        @test result == true
+    end
+
 
     # --------------------------------------------------------------------------------------------------
     # 7) Volume Z-score
@@ -253,7 +387,9 @@ import automated_trading_test_environment as ATTE
         :realVol5day, :realVol10day, :realVol21day,
         :gkVol21day, :volOfVol21day,
         :maDiff10_50day, :maDiff20_100day,
-        :volumeZscore21day, :amihud21day
+        :volumeZscore21day, :amihud21day,
+        :ema5MinusEma21,:ema21MinusEma100,
+        :ema5daySlope, :ema10daySlope, :ema21daySlope
     ]
 
     pca_dict = ATTE.PCA(OHLCVT_ETH_DF, feature_cols)

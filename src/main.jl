@@ -35,12 +35,19 @@ OHLCVT_df = ATTE.get_pair_interval_df(pair, interval)
 # Feature engineering for clustering and regime analysis
 # --------------------------------------------------------------------------------------------------
 
-# 1) Log returns
+# 1a) Log returns
 #    ln(P_t / P_{t-n}) for multiple rolling horizons
 OHLCVT_df[!, :lnReturn1day]  = ATTE.logreturn(OHLCVT_df[!, :close], 1)
 OHLCVT_df[!, :lnReturn5day]  = ATTE.logreturn(OHLCVT_df[!, :close], 5)
 OHLCVT_df[!, :lnReturn21day] = ATTE.logreturn(OHLCVT_df[!, :close], 21)
 
+
+# 1b) signed Log returns
+#    rt=ln(P_t / P_{t-n}) for multiple rolling horizons
+#    sign(rt)*ln(1+abs(rt))
+OHLCVT_df[!, :slnReturn1day]  = ATTE.signed_logreturn(OHLCVT_df[!, :close], 1)
+OHLCVT_df[!, :slnReturn5day]  = ATTE.signed_logreturn(OHLCVT_df[!, :close], 5)
+OHLCVT_df[!, :slnReturn21day] = ATTE.signed_logreturn(OHLCVT_df[!, :close], 21)
 
 # 2) Rate of Change (ROC)
 #    (P_t - P_{t-n}) / P_{t-n}
@@ -71,9 +78,15 @@ OHLCVT_df[!, :gkVol21day] = ATTE.gk_volatility(
 OHLCVT_df[!, :volOfVol21day] = ATTE.vol_of_vol(OHLCVT_df[!, :close], 1, 21)
 
 
-# 6) Moving-average differentials
+# 6a) Moving-average differentials
 OHLCVT_df[!, :maDiff10_50day]  = ATTE.ma_diff(OHLCVT_df[!, :close], 10, 50)
 OHLCVT_df[!, :maDiff20_100day] = ATTE.ma_diff(OHLCVT_df[!, :close], 20, 100)
+
+
+# 6b) Short term slope
+OHLCVT_df[!, :stSlope3day]=ATTE.short_term_slope(OHLCVT_df[!, :close], 3)
+OHLCVT_df[!, :stSlope10day]=ATTE.short_term_slope(OHLCVT_df[!, :close], 10)
+OHLCVT_df[!, :stSlope21day]=ATTE.short_term_slope(OHLCVT_df[!, :close], 21)
 
 
 # 7) Volume Z-score
@@ -90,6 +103,16 @@ OHLCVT_df[!, :amihud21day] = ATTE.amihud(
 )
 
 
+# 9) EMA difference
+OHLCVT_df[!, :ema5MinusEma21] = ATTE.ema_diff(OHLCVT_df[!, :close], 5, 21)#exponential moving average
+OHLCVT_df[!, :ema21MinusEma100] = ATTE.ema_diff(OHLCVT_df[!, :close], 21, 100)
+
+# 10) EMA slope
+OHLCVT_df[!, :ema5daySlope] = ATTE.ema_slope_normalized(OHLCVT_df[!, :close], 5)
+OHLCVT_df[!, :ema10daySlope] = ATTE.ema_slope_normalized(OHLCVT_df[!, :close], 10)
+OHLCVT_df[!, :ema21daySlope] = ATTE.ema_slope_normalized(OHLCVT_df[!, :close], 21)
+
+
 # --------------------------------------------------------------------------------------------------
 # Pre-normalization nonlinear transforms
 # --------------------------------------------------------------------------------------------------
@@ -101,6 +124,9 @@ OHLCVT_df[!, :roc63day] .= ATTE.signed_log.(OHLCVT_df[!, :roc63day])
 # Log transform for strictly positive Amihud measure
 OHLCVT_df[!, :amihud21day] = log.(1.0 .+ OHLCVT_df[!, :amihud21day])
 
+# 9) log(1+trades)
+OHLCVT_df[!, :lntrades] = log.(1.0 .+ OHLCVT_df[!, :trades])
+
 
 # --------------------------------------------------------------------------------------------------
 # Z-score normalization
@@ -108,7 +134,7 @@ OHLCVT_df[!, :amihud21day] = log.(1.0 .+ OHLCVT_df[!, :amihud21day])
 
 exclude = [
     :timestamp, :open, :high, :low, :close,
-    :volume, :trades, :volumeZscore21day
+    :volume, :volumeZscore21day
 ]
 
 cols = Symbol.(names(OHLCVT_df, ATTE.Not(exclude)))
@@ -125,6 +151,9 @@ feature_cols = [
     :lnReturn1day,
     :lnReturn5day,
     :lnReturn21day,
+    :slnReturn1day,
+    :slnReturn5day,
+    :slnReturn21day,
     :roc21day,
     :roc63day,
     :realVol5day,
@@ -134,8 +163,14 @@ feature_cols = [
     :volOfVol21day,
     :maDiff10_50day,
     :maDiff20_100day,
+    :ema5MinusEma21,
+    :ema21MinusEma100,
+    :ema5daySlope,
+    :ema10daySlope,
+    :ema21daySlope,
     :volumeZscore21day,
-    :amihud21day
+    :amihud21day,
+    :lntrades
 ]
 
 results  = ATTE.validate_features(OHLCVT_df, feature_cols)
@@ -144,15 +179,23 @@ pca_dict = ATTE.PCA(OHLCVT_df, feature_cols)
 df_pca = ATTE.percent_explained_PCA(
     pca_dict["pca_df"],
     pca_dict["eigen_values"],
-    pca_dict["nonmissing_idx"]
+    pca_dict["nonmissing_idx"];
+    percent_explained=0.95
 )
 
+X = Matrix(df_pca[:, ATTE.Not(:row_idx)])
+k = 3  # number of clusters
 
+# Fit a full-covariance GMM directly
+gmm = ATTE.GMM(k, X; kind=:full)
 
+ATTE.em!(gmm, X; nIter = 50)
 
+# Posterior probabilities (first element of tuple)
+post, _ = ATTE.gmmposterior(gmm, X)  # post is now Matrix{Float64}
 
-
-#NOTE - organize and explain PCA in typst
+# Hard cluster assignments
+labels = map(i -> argmax(post[i, :]), 1:size(X, 1))
 
 
 #=ts = OHLCVT["XBTUSD"]["1440"]["df"][!,:timestamp][1]

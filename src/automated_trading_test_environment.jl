@@ -1,8 +1,8 @@
 module automated_trading_test_environment
 
-using CSV, DataFrames, Dates, TimeZones, Statistics, LinearAlgebra
+using CSV, DataFrames, Dates, TimeZones, Statistics, LinearAlgebra, Indicators, GaussianMixtures
 
-include("clusteringIndicators.jl")
+include("Indicators.jl")
 include("data.jl")
 include("PCA.jl")
 

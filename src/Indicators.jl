@@ -2,14 +2,24 @@
 
 function calculate_clustering_indicators(df)
     #=
-    Use the following for clustering indicators
-    1)Log return
+    1a)Log return
     log return​=ln(Pt​/Pt-1)​
     close to close of t=1, 5, 21 rolling windows
     =#
     df[!,:lnReturn1day] = logreturn(df[!,:close], 1)
     df[!,:lnReturn5day] = logreturn(df[!,:close], 5)
     df[!,:lnReturn21day] = logreturn(df[!,:close], 21)
+
+    #=
+    1b)signed Log return
+    log return​=ln(Pt​/Pt-1)
+    signed log=sign(log return​)*(1+abs(log return​))​
+    close to close of t=1, 5, 21 rolling windows
+    =#
+    df[!,:slnReturn1day] = signed_logreturn(df[!,:close], 1)
+    df[!,:slnReturn5day] = signed_logreturn(df[!,:close], 5)
+    df[!,:slnReturn21day] = signed_logreturn(df[!,:close], 21)
+    
     #=
     2) Rate of change
     ROC t​(n)=(​Pt-Pt−n)​/Pt−n​
@@ -42,10 +52,30 @@ function calculate_clustering_indicators(df)
     df[!,:volOfVol21day] = vol_of_vol(df[!,:close], 1, 21)
 
     #=
-    6) Moving average diff (10day-50day, 100day-20day)
+    6a) Moving average diff (10day-50day, 100day-20day)
     =#
     df[!,:maDiff10_50day] = ma_diff(df[!,:close], 10, 50)
     df[!,:maDiff20_100day] = ma_diff(df[!,:close], 20, 100)
+
+    
+    #=
+    6b) Short term slope
+    =#
+    df[!, :stSlope3day]=short_term_slope(df[!, :close], 3)
+    df[!, :stSlope10day]=short_term_slope(df[!, :close], 10)
+    df[!, :stSlope21day]=short_term_slope(df[!, :close], 21)
+
+
+    # 9) EMA difference
+    df[!, :ema5MinusEma21] = ema_diff(df[!, :close], 5, 21)#exponential moving average
+    df[!, :ema21MinusEma100] = ema_diff(df[!, :close], 21, 100)
+
+    # 10) EMA slope
+    df[!, :ema5daySlope] = ema_slope_normalized(df[!, :close], 5)
+    df[!, :ema10daySlope] = ema_slope_normalized(df[!, :close], 10)
+    df[!, :ema21daySlope] = ema_slope_normalized(df[!, :close], 21)
+
+
     #=
     7)Volume Z score
     Zn=Vo-Vmean,n/Vstd,n
@@ -108,6 +138,35 @@ function logreturn(prices::AbstractVector, n::Int=1)
 
     return logret
 end
+
+"""
+    signed_logreturn(prices::AbstractVector, n::Int=1)
+
+Compute the **signed logarithmic return** of a price series over a lag `n`.
+
+# Arguments
+- `prices::AbstractVector`: Vector of asset prices.
+- `n::Int=1`: Lookback period (default 1).
+
+# Returns
+- `Vector{Union{Float64, Missing}}`: Vector of signed log returns. The first `n` entries are `missing`.
+
+# Description
+For each time `t > n`, the standard log return is computed:
+"""
+function signed_logreturn(prices::AbstractVector, n::Int=1)
+    N = length(prices)
+    slogret = Vector{Union{Float64, Missing}}(undef, N)  # allow missing
+    slogret[1:n] .= missing                               # first n entries have no data
+
+    @inbounds for t in (n+1):N
+        r = log(prices[t] / prices[t-n])                 # standard log return
+        slogret[t] = sign(r) * log(1 + abs(r))           # signed log transform
+    end
+
+    return slogret
+end
+
 
 """
     roc(prices::AbstractVector, n::Int=1)
@@ -483,6 +542,178 @@ function ma_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
     end
 
     return ma_diff
+end
+
+"""
+    ema(prices::AbstractVector, n::Int)
+
+Compute the **exponential moving average (EMA)** of a price series over a window of `n` periods.
+
+# Arguments
+- `prices::AbstractVector`: Vector of prices or values.
+- `n::Int`: Lookback period for the EMA.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`: EMA series, with first `n-1` entries as `missing`.
+
+# Description
+The EMA is defined recursively as:
+
+    EMA_t = α * P_t + (1 - α) * EMA_{t-1},   t ≥ 1
+
+where α = 2 / (n + 1), and P_t is the price at time t. The first EMA value is usually initialized as the first price in the series.
+"""
+function exma(prices::AbstractVector, n::Int)
+    N = length(prices)
+    ema_series = Vector{Union{Float64, Missing}}(undef, N)
+    ema_series[1:n-1] .= missing  # first n-1 entries cannot be computed
+
+    α = 2 / (n + 1)
+    # Initialize EMA with the first available price
+    ema_series[n] = prices[n]
+
+    @inbounds for t in (n+1):N
+        ema_series[t] = α * prices[t] + (1 - α) * ema_series[t-1]
+    end
+
+    return ema_series
+end
+
+"""
+    ema_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
+
+Compute the difference between short-term and long-term exponential moving averages (EMA) of a price series.
+
+# Arguments
+- `prices::AbstractVector`: Vector of prices or values.
+- `short_n::Int=10`: Lookback period for the short-term EMA (default 10).
+- `long_n::Int=50`: Lookback period for the long-term EMA (default 50).
+
+# Returns
+- `Vector{Union{Float64, Missing}}`: EMA difference series. Values are `missing` where either EMA is undefined.
+"""
+function ema_diff(prices::AbstractVector, short_n::Int=10, long_n::Int=50)
+    @assert short_n < long_n "short_n must be less than long_n"
+
+    short_ema = exma(prices, short_n)
+    long_ema  = exma(prices, long_n)
+
+    N = length(prices)
+    diff = Vector{Union{Float64, Missing}}(undef, N)
+
+    @inbounds for t in 1:N
+        if ismissing(short_ema[t]) || ismissing(long_ema[t])
+            diff[t] = missing
+        else
+            diff[t] = short_ema[t] - long_ema[t]
+        end
+    end
+
+    return diff
+end
+
+
+"""
+    short_term_slope(prices::AbstractVector, n::Int=5)
+
+Compute the **short-term slope** of a time series `x` over a rolling window of `n` periods.
+
+# Arguments
+- `prices::AbstractVector`: Time series values.
+- `n::Int=5`: Lookback window for slope computation (default 5).
+
+# Returns
+- `Vector{Union{Float64, Missing}}`: Rolling slopes. The first `n-1` entries are `missing`.
+
+# Description
+For each time t ≥ n, the slope is computed using ordinary least squares on the last `n` points:
+
+"""
+function short_term_slope(prices::AbstractVector, n::Int=21)
+    N = length(prices)
+    slopes = Vector{Union{Float64, Missing}}(undef, N)
+    slopes[1:n-1] .= missing  # first n-1 entries cannot be computed
+
+    indices = 0:(n-1)
+    mean_i = mean(indices)
+    denom = sum((indices .- mean_i).^2)
+
+    @inbounds for t in n:N
+        window = prices[(t-n+1):t]
+        mean_x = mean(window)
+        slopes[t] = sum((indices .- mean_i) .* (window .- mean_x)) / denom
+    end
+
+    return slopes
+end
+
+"""
+    ema_slope(prices::AbstractVector, n::Int=21)
+
+Compute the slope of the Exponential Moving Average (EMA) over window `n`.
+
+The EMA itself is assumed to be computed by `Indicators.ema(prices, n)`.
+
+# Arguments
+- `prices::AbstractVector`: Price series.
+- `n::Int=21`: EMA lookback window.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`: EMA slope series.
+  The first `n` entries are `missing`.
+
+# Description
+For t > n:
+    slope_t = EMA_t - EMA_{t-1}
+
+This captures short-term trend direction and momentum.
+"""
+function ema_slope(prices::AbstractVector, n::Int=21)
+    N = length(prices)
+    _ema = exma(prices, n)
+
+    slope = Vector{Union{Float64, Missing}}(undef, N)
+    slope[1:n] .= missing
+
+    @inbounds for t in (n+1):N
+        slope[t] = _ema[t] - _ema[t-1]
+    end
+
+    return slope
+end
+"""
+    ema_slope_normalized(prices::AbstractVector, n::Int=21)
+
+Compute the normalized slope of the Exponential Moving Average (EMA) over window `n`.
+
+The EMA itself is assumed to be computed by `Indicators.ema(prices, n)`.
+
+# Arguments
+- `prices::AbstractVector`: Price series.
+- `n::Int=21`: EMA lookback window.
+
+# Returns
+- `Vector{Union{Float64, Missing}}`: EMA slope series.
+  The first `n` entries are `missing`.
+
+# Description
+For t > n:
+    slope_t = EMA_t - EMA_{t-1} / EMA_{t-1}
+
+This captures short-term trend direction and momentum.
+"""
+function ema_slope_normalized(prices::AbstractVector, n::Int=21)
+    N = length(prices)
+    _ema = exma(prices, n)
+
+    slope = Vector{Union{Float64, Missing}}(undef, N)
+    slope[1:n] .= missing
+
+    @inbounds for t in (n+1):N
+        slope[t] = (_ema[t] - _ema[t-1]) / _ema[t-1]
+    end
+
+    return slope
 end
 
 function simple_mean(arr::AbstractVector)
