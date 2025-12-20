@@ -184,20 +184,23 @@ df_pca = ATTE.percent_explained_PCA(
 )
 
 X = Matrix(df_pca[:, ATTE.Not(:row_idx)])
-k = 3  # number of clusters
 
-# Fit a full-covariance GMM directly
-gmm = ATTE.GMM(k, X; kind=:full)
+# Gaussian mixture model clustering 
+best_k, gmm, best_bic = ATTE.select_k_bic(X; ks=2:15, kind=:diag)
 
-ATTE.em!(gmm, X; nIter = 50)
+post, _ = ATTE.gmmposterior(gmm, X)
 
-# Posterior probabilities (first element of tuple)
-post, _ = ATTE.gmmposterior(gmm, X)  # post is now Matrix{Float64}
+labels = argmax.(eachrow(post))
 
-# Hard cluster assignments
-labels = map(i -> argmax(post[i, :]), 1:size(X, 1))
+avg_ll = ATTE.avll(gmm, X)
 
+entropy = ATTE.mean_entropy(post)# must be <0.3
 
+for _k = 1:1:6
+    println(_k,": ", count(x -> x == _k, labels))#669
+end
+
+ 
 #=ts = OHLCVT["XBTUSD"]["1440"]["df"][!,:timestamp][1]
 dt = unix2datetime(ts)
 dt_be = ZonedDateTime(dt, tz"Europe/Brussels")
@@ -209,3 +212,48 @@ println(dt_be)=#
     println("Range of ", col, " is: ", _mn, " - ", _mx)
 end=#
 
+
+k=2
+kind=:full
+function select_k_bic(X::Matrix{Float64}; ks::UnitRange{Int64}=2:15, kind::Symbol=:full)
+    d, n = size(X)
+
+    best_bic = Inf
+    best = nothing
+
+    for k in ks
+        try
+            gmm = ATTE.GMM(
+                k, X;
+                kind = kind,
+                nInit = 5,      # critical for stability
+                nIter = 100
+            )
+
+            ATTE.em!(gmm, X)
+
+            ll = sum(ATTE.llpg(gmm, X))  # total log-likelihood
+
+            p = kind == :full ? num_params_full(k, d) :
+                                (k - 1) + k*d + k*d  # diag
+
+            bic = -2 * ll + p * log(n)
+
+            if bic < best_bic
+                best_bic = bic
+                best = (k=k, gmm=gmm, bic=bic)
+            end
+
+        catch err
+            @warn "GMM failed for k=$k" exception=err
+        end
+    end
+
+    return best
+end
+
+
+function num_params_full(k, d)
+    # weights (k-1) + means (k*d) + covariances (k*d*(d+1)/2)
+    return (k - 1) + k*d + k*d*(d + 1) ÷ 2
+end

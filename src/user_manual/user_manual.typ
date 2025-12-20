@@ -139,11 +139,11 @@ Let $sigma_t^d$ denote the daily realized volatility computed from prices.
 
 Using a rolling window of $n$ days, define the average realized volatility as
 
-$ m_t = (1 / n) * sum(sigma_(t-1)^d), quad i = 0, dots, n - 1 $
+$ m_t = (1 / n) dot sum(sigma_(t-1)^d), quad i = 0, dots, n - 1 $
 
 The volatility of volatility is then defined as
 
-$ v_t = sqrt((1 / n) * sum((sigma_(t-1) - m_t)^2)), quad i = 0, dots, n - 1 $
+$ v_t = sqrt((1 / n) dot sum((sigma_(t-1) - m_t)^2)), quad i = 0, dots, n - 1 $
 
 
 A high value of $v_t$ indicates rapidly changing volatility and is often
@@ -449,8 +449,72 @@ $ ∑_(k=1)^d lambda_k = tr(Sigma) $
 
 $ X_c ≈ Z · V^T $
 
-== Results
-Present results, figures, or tables.
+== Clustering
+=== Log-likelihood of a Gaussian Mixture Model
+
+Let $X = { x_1, x_2, ..., x_n } subset RR^d$ be a dataset of n independent samples.
+A Gaussian Mixture Model with K components is defined as
+
+$
+p(x) = sum_(k=1)^K pi_k dot cal(n)(x | mu_k, Sigma_k),
+$
+
+where the mixture weights satisfy
+
+$
+sum_(k=1)^K pi_k = 1.
+$
+
+The log-likelihood of the dataset under the model is
+
+$
+cal(L)(X)
+= sum_(i=1)^n log(p(x_i))
+= sum_(i=1)^n log(
+  sum_(k=1)^K pi_k dot cal(n)(x_i | mu_k, Sigma_k)
+).
+$
+=== Bayesian Information Criterion (BIC)
+Assume a Gaussian Mixture Model with $k$ components and diagonal covariance
+matrices.
+
+The model density is defined as
+$
+p(x) = sum_(j=1)^k pi_j dot cal(n)(x | mu_j, Sigma_j),
+$
+where $pi_j >= 0$ and $sum_(j=1)^k pi_j = 1$.
+
+The total log-likelihood of the dataset is
+$
+cal(L)(X) = sum_(i=1)^n log( p(x_i) ).
+$
+
+The average log-likelihood is calculated as:
+$
+overline(ell) = (1 / n) dot cal(L)(X),
+$
+so that
+$
+overline(cal(L)) = n dot overline(ell).
+$
+
+For a diagonal-covariance GMM, the number of free parameters is
+$
+p = (k dot d)      
+  + (k dot d)      
+  + (k - 1)    
+$
+
+- means contribute $k dot d$ parameters,
+- variances contribute $k dot d$ parameters,
+- mixture weights contribute $k - 1$ parameters.
+
+The Bayesian Information Criterion (B) is then
+$
+B = -2 dot overline(cal(L)) + p dot log(n).
+$
+
+Lower BIC values indicate a better trade-off between model fit and complexity.
 
 == Discussion
 Interpret the results and implications.
