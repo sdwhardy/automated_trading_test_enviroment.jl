@@ -196,7 +196,7 @@ avg_ll = ATTE.avll(gmm, X)
 
 entropy = ATTE.mean_entropy(post)# must be <0.3
 
-for _k = 1:1:6
+for _k = 1:1:best_k
     println(_k,": ", count(x -> x == _k, labels))#669
 end
 
