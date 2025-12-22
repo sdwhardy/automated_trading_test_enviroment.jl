@@ -494,16 +494,10 @@ $
 cal(L)(X) = sum_(i=1)^n log(p(x_i)).
 $
 
-The number of free parameters $p$ depends on the covariance structure.
-For a diagonal-covariance GMM in $d$ dimensions,
-
-$
-p = k dot d // means
-
-k dot d // variances
-
-(k - 1). // mixture weights
-$
+For a diagonal-covariance GMM, the number of free parameters is $ p = (k dot d) + (k dot d) + (k - 1) $ 
+- means contribute $k dot d$ parameters, 
+- variances contribute $k dot d$ parameters, 
+- mixture weights contribute $k - 1$ parameters.
 
 The BIC is defined as
 
@@ -522,7 +516,7 @@ For each $k in K$, a GMM with $k$ components is fitted by maximizing the
 log-likelihood
 
 $
-cal(L)k = sum(i=1)^n log(p_k(x_i)),
+cal(L)(k) = sum_(i=1)^n log(p_k(x_i)),
 $
 using the Expectation Maximization (EM) Algorithm.
 
@@ -552,7 +546,7 @@ as GMMs.
 Given data $x_1, dots, x_n in RR^d$, the GMM density is
 
 $
-p(x) = sum_(k=1)^K pi_k dot $Normal$(x | mu_k, Sigma_k).
+p(x) = sum_(k=1)^K pi_k dot "Normal"(x | mu_k, Sigma_k).
 $
 
 === E-step (Expectation)
@@ -561,8 +555,8 @@ At iteration $t$, compute the responsibilities
 
 $
 r_(i,k)^(t)
-= (pi_k^(t) dot $Normal$(x_i | mu_k^(t), Sigma_k^(t)))
-/ sum_(j=1)^K pi_j^(t) dot $Normal$(x_i | mu_j^(t), Sigma_j^(t)).
+= (pi_k^(t) dot "Normal"(x_i | mu_k^(t), Sigma_k^(t)))
+/ (sum_(j=1)^K pi_j^(t) dot "Normal"(x_i | mu_j^(t), Sigma_j^(t))).
 $
 
 These represent soft assignments of samples to clusters.
