@@ -14,7 +14,7 @@
 // ----------------------------
 // Title
 // ----------------------------
-= User Manual  
+= Technical Manual  
 #datetime.today()
 
 // ----------------------------
@@ -450,10 +450,15 @@ $ ∑_(k=1)^d lambda_k = tr(Sigma) $
 $ X_c ≈ Z · V^T $
 
 == Clustering
-=== Log-likelihood of a Gaussian Mixture Model
 
-Let $X = { x_1, x_2, ..., x_n } subset RR^d$ be a dataset of n independent samples.
-A Gaussian Mixture Model with K components is defined as
+=== Gaussian Mixture Models and Log-Likelihood
+
+Let
+$X = { x_1, x_2, ..., x_n } subset RR^d$
+be a dataset of $n$ independent samples.
+
+A Gaussian Mixture Model (GMM) with $K$ components defines the probability
+density
 
 $
 p(x) = sum_(k=1)^K pi_k dot cal(n)(x | mu_k, Sigma_k),
@@ -462,7 +467,7 @@ $
 where the mixture weights satisfy
 
 $
-sum_(k=1)^K pi_k = 1.
+pi_k >= 0, quad sum_(k=1)^K pi_k = 1.
 $
 
 The log-likelihood of the dataset under the model is
@@ -471,53 +476,147 @@ $
 cal(L)(X)
 = sum_(i=1)^n log(p(x_i))
 = sum_(i=1)^n log(
-  sum_(k=1)^K pi_k dot cal(n)(x_i | mu_k, Sigma_k)
+sum_(k=1)^K pi_k dot cal(n)(x_i | mu_k, Sigma_k)
 ).
 $
+
+Maximizing this quantity corresponds to fitting the model parameters to
+the observed data.
+
 === Bayesian Information Criterion (BIC)
-Assume a Gaussian Mixture Model with $k$ components and diagonal covariance
-matrices.
 
-The model density is defined as
-$
-p(x) = sum_(j=1)^k pi_j dot cal(n)(x | mu_j, Sigma_j),
-$
-where $pi_j >= 0$ and $sum_(j=1)^k pi_j = 1$.
+Model selection requires balancing goodness of fit with model complexity.
+The Bayesian Information Criterion (BIC) provides such a trade-off.
 
-The total log-likelihood of the dataset is
+For a GMM with $k$ components, the total log-likelihood is
+
 $
-cal(L)(X) = sum_(i=1)^n log( p(x_i) ).
+cal(L)(X) = sum_(i=1)^n log(p(x_i)).
 $
 
-The average log-likelihood is calculated as:
+The number of free parameters $p$ depends on the covariance structure.
+For a diagonal-covariance GMM in $d$ dimensions,
+
 $
-overline(ell) = (1 / n) dot cal(L)(X),
-$
-so that
-$
-overline(cal(L)) = n dot overline(ell).
+p = k dot d // means
+
+k dot d // variances
+
+(k - 1). // mixture weights
 $
 
-For a diagonal-covariance GMM, the number of free parameters is
-$
-p = (k dot d)      
-  + (k dot d)      
-  + (k - 1)    
-$
+The BIC is defined as
 
-- means contribute $k dot d$ parameters,
-- variances contribute $k dot d$ parameters,
-- mixture weights contribute $k - 1$ parameters.
-
-The Bayesian Information Criterion (B) is then
 $
-B = -2 dot overline(cal(L)) + p dot log(n).
+"BIC" = -2 dot cal(L)(X) + p dot log(n).
 $
 
-Lower BIC values indicate a better trade-off between model fit and complexity.
+Lower BIC values indicate a better compromise between fit quality and
+model complexity.
 
-== Discussion
-Interpret the results and implications.
+=== Selecting the Number of Clusters
+
+Let $K$ denote a set of candidate cluster counts.
+
+For each $k in K$, a GMM with $k$ components is fitted by maximizing the
+log-likelihood
+
+$
+cal(L)k = sum(i=1)^n log(p_k(x_i)),
+$
+using the Expectation Maximization (EM) Algorithm.
+
+The corresponding BIC score is
+
+$
+"BIC"(k) = -2 dot cal(L)_k + p_k dot log(n),
+$
+
+where $p_k$ is the number of free parameters for the model with $k$
+components.
+
+The selected number of clusters $k^*$ satisfies
+
+$
+"BIC"(k^*) <= "BIC"(k) quad "for all" k in K.
+$
+
+== Expectation–Maximization (EM) Algorithm
+
+The Expectation–Maximization (EM) algorithm is an iterative procedure for
+estimating parameters of probabilistic models with latent variables, such
+as GMMs.
+
+=== Model
+
+Given data $x_1, dots, x_n in RR^d$, the GMM density is
+
+$
+p(x) = sum_(k=1)^K pi_k dot $Normal$(x | mu_k, Sigma_k).
+$
+
+=== E-step (Expectation)
+
+At iteration $t$, compute the responsibilities
+
+$
+r_(i,k)^(t)
+= (pi_k^(t) dot $Normal$(x_i | mu_k^(t), Sigma_k^(t)))
+/ sum_(j=1)^K pi_j^(t) dot $Normal$(x_i | mu_j^(t), Sigma_j^(t)).
+$
+
+These represent soft assignments of samples to clusters.
+
+=== M-step (Maximization)
+
+Update parameters using the responsibilities:
+
+$
+N_k = sum_(i=1)^n r_(i,k),
+$
+
+$
+pi_k^(t+1) = N_k / n,
+$
+
+$
+mu_k^(t+1) = 1 / N_k dot sum_(i=1)^n r_(i,k) dot x_i,
+$
+
+$
+Sigma_k^(t+1)
+= 1 / N_k dot sum_(i=1)^n r_(i,k)
+dot (x_i - mu_k)(x_i - mu_k)^T.
+$
+
+=== Convergence
+
+Each EM iteration increases the data log-likelihood.
+The algorithm terminates when improvements fall below a tolerance or a
+maximum number of iterations is reached.
+
+
+=== Posterior Entropy as a Clustering Diagnostic
+
+Let
+$P in RR^(n times K)$
+be the posterior probability matrix, where $P_(i,k)$ denotes the
+probability that sample $i$ belongs to cluster $k$.
+
+The entropy of sample $i$ is
+
+$
+H_i = - sum_(k=1)^K P_(i,k) log(P_(i,k)).
+$
+
+The mean posterior entropy is
+
+$
+H = (1 / n) sum_(i=1)^n H_i.
+$
+
+Lower entropy indicates more confident (well-separated) cluster
+assignments, while higher entropy suggests greater overlap or ambiguity.
 
 == Conclusion
 Summarize findings and next steps.
