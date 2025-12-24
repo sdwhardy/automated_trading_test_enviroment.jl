@@ -409,4 +409,46 @@ import automated_trading_test_environment as ATTE
     X_recon = pca_dict["pca_df"] * pca_dict["eigen_vectors"]'
     @test ATTE.norm(X_recon - pca_dict["X_centered"], Inf) < tol
 
+    df_pca = ATTE.percent_explained_PCA(
+        pca_dict["pca_df"],
+        pca_dict["eigen_values"],
+        pca_dict["nonmissing_idx"];
+        percent_explained=0.95
+    )
+
+    #Cluster using Gaussian mixture model clustering 
+    println("Testing GMM Clustering...")
+    X = Matrix(df_pca[:, ATTE.Not(:row_idx)])
+
+    # Gaussian mixture model clustering 
+    best_k, gmm, best_bic = ATTE.select_k_bic(X; ks=2:15, kind=:diag)
+
+    println("Checking lowest BIC selected...")
+
+    @test best_k == argmin(best_bic)+1
+
+    post, _ = ATTE.gmmposterior(gmm, X)
+
+    labels = argmax.(eachrow(post))
+
+    println("Checking cluster entropy...")
+
+    entropy = ATTE.mean_entropy(post)
+
+    @test entropy < 0.4
+
+    println("Checking cluster stability...")
+
+    m,s = ATTE.bootstrap_stability(X, best_k; B=50)
+
+    @test m > 0.7
+
+    @test s < 0.2
+
+    println("Lowest BIC occurs at k: ",best_k)
+
+    println("Entropy: ", entropy)
+
+    println("Stability Mean: ", m, ", Std: ",s)
+
 end

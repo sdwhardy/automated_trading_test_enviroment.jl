@@ -192,13 +192,23 @@ post, _ = ATTE.gmmposterior(gmm, X)
 
 labels = argmax.(eachrow(post))
 
-avg_ll = ATTE.avll(gmm, X)
-
 entropy = ATTE.mean_entropy(post)# must be <0.3
 
+m,s = ATTE.bootstrap_stability(X, best_k; B=50)
+
+println("Entropy: ", entropy)
+
 for _k = 1:1:best_k
-    println(_k,": ", count(x -> x == _k, labels))#669
+    println(_k,": ", count(x -> x == _k, labels))#669 
 end
+
+println("Stability Mean: ", m, ", Std: ",s)
+
+clusters = ATTE.data_into_clusters(OHLCVT_df, df_pca, labels)
+
+
+
+
 
  
 #=ts = OHLCVT["XBTUSD"]["1440"]["df"][!,:timestamp][1]
@@ -226,7 +236,7 @@ function select_k_bic(X::Matrix{Float64}; ks::UnitRange{Int64}=2:15, kind::Symbo
             gmm = ATTE.GMM(
                 k, X;
                 kind = kind,
-                nInit = 5,      # critical for stability
+                nIdf_pcanit = 5,      # critical for stability
                 nIter = 100
             )
 

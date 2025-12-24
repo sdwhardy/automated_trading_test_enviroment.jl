@@ -96,11 +96,47 @@ function select_k_bic(X::Matrix; ks=2:15, kind=:diag)
     bics = Float64[]
     models = GMM[]
 
+    n, d = size(X)
+    
+    for k in ks
+        try
+            best_gmm = nothing
+            best_ll = -Inf
+
+            for init in 1:20
+                gmm = GMM(k, X; kind=:diag, nInit=init)
+                em!(gmm, X; nIter=100)
+
+                ll = n * avll(gmm, X)   # total log-likelihood
+
+                if ll > best_ll
+                    best_ll = ll
+                    best_gmm = deepcopy(gmm)
+                end
+            end
+            push!(bics, gmm_bic(best_gmm, X))
+            println(k," bic is: ",bics[end])
+            push!(models, best_gmm)
+        catch err
+            @warn "GMM failed for k=$k" err
+            push!(bics, Inf)
+        end
+    end
+
+    kopt_idx = argmin(bics)
+    return ks[kopt_idx], models[kopt_idx], bics
+end
+
+function select_k_bic_old(X::Matrix; ks=2:15, kind=:diag)
+    bics = Float64[]
+    models = GMM[]
+
     for k in ks
         try
             gmm = GMM(k, X; kind=kind)
             em!(gmm, X; nIter=50)
             push!(bics, gmm_bic(gmm, X))
+            println(k," bic is: ",bics[end])
             push!(models, gmm)
         catch err
             @warn "GMM failed for k=$k" err
@@ -111,6 +147,7 @@ function select_k_bic(X::Matrix; ks=2:15, kind=:diag)
     kopt_idx = argmin(bics)
     return ks[kopt_idx], models[kopt_idx], bics
 end
+
 """
     num_params_full(k, d)
 
@@ -165,3 +202,43 @@ function mean_entropy(post)
     return mean(-sum(p .* log.(p .+ eps())) for p in eachrow(post))
 end
 
+function bootstrap_stability(X, k; B=50)
+    gmm_ref = GMM(k, X; kind=:diag, nInit=20, nIter=50)
+    em!(gmm_ref, X)
+    ref_labels = argmax.(eachrow(gmmposterior(gmm_ref, X)[1]))
+
+    scores = Float64[]
+    for i in 1:B
+        idx = sample(1:size(X,1), size(X,1), replace=true)
+        Xb = X[idx, :]
+
+        gmm = GMM(k, Xb; kind=:diag)
+        em!(gmm, Xb)
+
+        post, _ = gmmposterior(gmm, X)
+        labels = argmax.(eachrow(post))
+        push!(scores, randindex(ref_labels, labels)[2])
+    end
+    
+    return mean(scores), std(scores)
+
+end   
+
+function data_into_clusters(OHLCVT_df, df_pca, labels)
+    
+    cluster_numbers=Dict()
+    dict_keys=unique(labels)
+    for v in dict_keys
+        if !haskey(cluster_numbers,v)
+            push!(cluster_numbers,v=>Dict("data"=>DataFrame(),"pca"=>DataFrame()))
+        end 
+    end
+
+    for (i,v) in enumerate(labels)
+        push!(cluster_numbers[v]["pca"],df_pca[i, :])
+        push!(cluster_numbers[v]["data"],OHLCVT_df[df_pca[!,:row_idx][i], :])
+    end
+
+    return cluster_numbers
+
+end
