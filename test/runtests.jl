@@ -418,18 +418,19 @@ import automated_trading_test_environment as ATTE
 
     #Cluster using Gaussian mixture model clustering 
     println("Testing GMM Clustering...")
-    X = Matrix(df_pca[:, ATTE.Not(:row_idx)])
 
     # Gaussian mixture model clustering 
-    best_k, gmm, best_bic = ATTE.select_k_bic(X; ks=2:15, kind=:diag)
+    X = Matrix(df_pca[:, ATTE.Not(:row_idx)])
+
+    best_k, best_gmm, best_bics = ATTE.select_k_bic(X; ks=2:15, kind=:diag)
 
     println("Checking lowest BIC selected...")
 
-    @test best_k == argmin(best_bic)+1
+    @test best_k == argmin(best_bics)+1
 
-    post, _ = ATTE.gmmposterior(gmm, X)
+    post, _ = ATTE.gmmposterior(best_gmm, X)
 
-    labels = argmax.(eachrow(post))
+    best_labels = argmax.(eachrow(post))
 
     println("Checking cluster entropy...")
 
@@ -439,7 +440,7 @@ import automated_trading_test_environment as ATTE
 
     println("Checking cluster stability...")
 
-    m,s = ATTE.bootstrap_stability(X, best_k; B=50)
+    m,s = ATTE.bootstrap_stability(X, best_k, best_labels; B=50)
 
     @test m > 0.7
 

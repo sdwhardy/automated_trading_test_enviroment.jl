@@ -96,48 +96,17 @@ function select_k_bic(X::Matrix; ks=2:15, kind=:diag)
     bics = Float64[]
     models = GMM[]
 
-    n, d = size(X)
-    
     for k in ks
         try
-            best_gmm = nothing
-            best_ll = -Inf
-
-            for init in 1:20
-                gmm = GMM(k, X; kind=:diag, nInit=init)
-                em!(gmm, X; nIter=100)
-
-                ll = n * avll(gmm, X)   # total log-likelihood
-
-                if ll > best_ll
-                    best_ll = ll
-                    best_gmm = deepcopy(gmm)
-                end
-            end
-            push!(bics, gmm_bic(best_gmm, X))
-            println(k," bic is: ",bics[end])
-            push!(models, best_gmm)
-        catch err
-            @warn "GMM failed for k=$k" err
-            push!(bics, Inf)
-        end
-    end
-
-    kopt_idx = argmin(bics)
-    return ks[kopt_idx], models[kopt_idx], bics
-end
-
-function select_k_bic_old(X::Matrix; ks=2:15, kind=:diag)
-    bics = Float64[]
-    models = GMM[]
-
-    for k in ks
-        try
-            gmm = GMM(k, X; kind=kind)
+            gmm = GMM(k, X; kind=kind, nInit=10, nIter=50)
             em!(gmm, X; nIter=50)
-            push!(bics, gmm_bic(gmm, X))
-            println(k," bic is: ",bics[end])
-            push!(models, gmm)
+            if any(isnan, gmm.Σ) || any(x -> x < 1e-8, gmm.Σ)
+                warning("Degenerate covariance")
+            else
+                push!(bics, gmm_bic(gmm, X))
+                println(k," bic is: ",bics[end])
+                push!(models, gmm)
+            end
         catch err
             @warn "GMM failed for k=$k" err
             push!(bics, Inf)
@@ -202,22 +171,22 @@ function mean_entropy(post)
     return mean(-sum(p .* log.(p .+ eps())) for p in eachrow(post))
 end
 
-function bootstrap_stability(X, k; B=50)
-    gmm_ref = GMM(k, X; kind=:diag, nInit=20, nIter=50)
-    em!(gmm_ref, X)
-    ref_labels = argmax.(eachrow(gmmposterior(gmm_ref, X)[1]))
-
+function bootstrap_stability(X, k, ref_labels; B=50)
+    
     scores = Float64[]
     for i in 1:B
         idx = sample(1:size(X,1), size(X,1), replace=true)
         Xb = X[idx, :]
 
-        gmm = GMM(k, Xb; kind=:diag)
-        em!(gmm, Xb)
-
-        post, _ = gmmposterior(gmm, X)
-        labels = argmax.(eachrow(post))
-        push!(scores, randindex(ref_labels, labels)[2])
+        gmm = GMM(k, Xb; kind=:diag, nInit=10, nIter=50)
+        em!(gmm, Xb; nIter=200)
+        if any(isnan, gmm.Σ) || any(x -> x < 1e-8, gmm.Σ)
+            warning("Degenerate covariance")
+        else
+            post, _ = gmmposterior(gmm, X)
+            labels = argmax.(eachrow(post))
+            push!(scores, randindex(ref_labels, labels)[2])
+        end
     end
     
     return mean(scores), std(scores)
