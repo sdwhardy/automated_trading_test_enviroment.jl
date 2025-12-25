@@ -212,11 +212,9 @@
     # X: n × d data matrix
     # labels: vector of cluster assignments from GMM
 
-    clusters[k]["pca"][!,:row_idx]
+    
 
-
-    n=:PC1
-
+    
     ATTE.plotlyjs()
     p = ATTE.plot() 
     palette = ATTE.palette(:tab10)
@@ -231,7 +229,7 @@
                     [0, 0],                   # y base
                     ribbon=[10, 10], # height of the band
                     color=palette[k],
-                    linecolor = :transparent,
+                    linecolor = palette[k],
                     alpha=0.2,
                     label="",                    
                     legend = false)
