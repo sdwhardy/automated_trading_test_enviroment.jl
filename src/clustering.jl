@@ -211,3 +211,65 @@ function data_into_clusters(OHLCVT_df, df_pca, labels)
     return cluster_numbers
 
 end
+
+function indicator_means_df(clusters,feature_cols)
+    table_of_means=DataFrame(feature_cols .=> Ref(Float64[]))
+    insertcols!(table_of_means, 1, :k => Int64[])
+    for k in keys(clusters)
+        cols_means=[]
+        push!(cols_means,k)
+        for col in feature_cols
+
+            push!(cols_means,mean(clusters[k]["data"][!,col]))
+
+        end
+
+        push!(table_of_means,cols_means)
+    end
+    return table_of_means
+end
+
+function mean_of_means(col_name,cols,df)
+        
+    df[!,col_name]=mean.(eachrow(df[!,cols]))
+
+    return df
+
+end
+
+
+
+
+function story_of_means(table_of_means)
+
+    means_of_means_cols=[:direction,:volatility, :vol_of_vol, :trend, :liquidity]
+
+    story_of_means_df=DataFrame(means_of_means_cols .=> Ref(String[]))
+    insertcols!(story_of_means_df, 1, :k => Int64[])
+
+
+    for _row in eachrow(table_of_means)
+
+        new_row=[]
+
+        push!(new_row,_row[:k])
+
+        for _col in means_of_means_cols
+
+            _sign = "0"
+
+            _sign = _row[_col] <= -0.5 ? "-" : _sign
+
+            _sign = _row[_col] >= 0.5 ? "+" : _sign
+
+            push!(new_row,_sign)
+            
+        end
+
+        push!(story_of_means_df,new_row)
+
+    end
+
+    story_of_means_df
+
+end

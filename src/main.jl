@@ -189,7 +189,7 @@
     X = Matrix(df_pca[:, ATTE.Not(:row_idx)])
 
     # Gaussian mixture model clustering 
-    best_k, best_gmm, best_bics = ATTE.select_k_bic(X; ks=2:15, kind=:diag)
+    best_k, best_gmm, best_bics = ATTE.select_k_bic(X; ks=2:3, kind=:diag)
 
     post, _ = ATTE.gmmposterior(best_gmm, X)
 
@@ -209,37 +209,201 @@
 
     clusters = ATTE.data_into_clusters(OHLCVT_df, df_pca, best_labels)
 
+    table_of_means = ATTE.indicator_means_df(clusters,feature_cols)
+
+    
+
+    direction_cols = [
+        :lnReturn1day,
+        :lnReturn5day,
+        :lnReturn21day,
+        :slnReturn1day,
+        :slnReturn5day,
+        :slnReturn21day,
+        :roc21day,
+        :roc63day
+    ]
+
+    table_of_means = ATTE.mean_of_means(:direction,direction_cols,table_of_means)
+
+    volatility_cols = [
+        :realVol5day,
+        :realVol10day,
+        :realVol21day,
+        :gkVol21day
+    ]
+
+    table_of_means = ATTE.mean_of_means(:volatility,volatility_cols,table_of_means)
+
+    vol_of_vol_cols = [
+        :volOfVol21day
+    ]
+
+    table_of_means = ATTE.mean_of_means(:vol_of_vol,vol_of_vol_cols,table_of_means)
+
+
+    trend_cols = [
+        :maDiff10_50day,
+        :maDiff20_100day,
+        :ema5MinusEma21,
+        :ema21MinusEma100,
+        :ema5daySlope,
+        :ema10daySlope,
+        :ema21daySlope
+    ]
+
+    table_of_means = ATTE.mean_of_means(:trend,trend_cols,table_of_means)
+
+    liquidity_cols = [
+        :volumeZscore21day,
+        :amihud21day,
+        :lntrades
+    ]
+
+    table_of_means = ATTE.mean_of_means(:liquidity,liquidity_cols,table_of_means)
+
+    story_of_means_df = ATTE.story_of_means(table_of_means)
+
+
+
+    new_max_k=length(unique(eachrow(story_of_means_df[!,ATTE.Not(:k)])))
+
+
+
+
+
+
+    
+    # Gaussian mixture model clustering 
+    best_k, best_gmm, best_bics = ATTE.select_k_bic(X; ks=2:new_max_k, kind=:diag)
+
+    post, _ = ATTE.gmmposterior(best_gmm, X)
+
+    best_labels = argmax.(eachrow(post))
+
+    entropy = ATTE.mean_entropy(post)# must be <0.3
+
+    m,s = ATTE.bootstrap_stability(X, best_k, best_labels; B=50)
+
+    println("Entropy: ", entropy)
+
+    for _k = 1:1:best_k
+        println(_k,": ", count(x -> x == _k, best_labels))#669 
+    end
+
+    println("Stability Mean: ", m, ", Std: ",s)
+
+    clusters = ATTE.data_into_clusters(OHLCVT_df, df_pca, best_labels)
+
+    table_of_means = ATTE.indicator_means_df(clusters,feature_cols)
+
+    
+
+    direction_cols = [
+        :lnReturn1day,
+        :lnReturn5day,
+        :lnReturn21day,
+        :slnReturn1day,
+        :slnReturn5day,
+        :slnReturn21day,
+        :roc21day,
+        :roc63day
+    ]
+
+    table_of_means = ATTE.mean_of_means(:direction,direction_cols,table_of_means)
+
+    volatility_cols = [
+        :realVol5day,
+        :realVol10day,
+        :realVol21day,
+        :gkVol21day
+    ]
+
+    table_of_means = ATTE.mean_of_means(:volatility,volatility_cols,table_of_means)
+
+    vol_of_vol_cols = [
+        :volOfVol21day
+    ]
+
+    table_of_means = ATTE.mean_of_means(:vol_of_vol,vol_of_vol_cols,table_of_means)
+
+
+    trend_cols = [
+        :maDiff10_50day,
+        :maDiff20_100day,
+        :ema5MinusEma21,
+        :ema21MinusEma100,
+        :ema5daySlope,
+        :ema10daySlope,
+        :ema21daySlope
+    ]
+
+    table_of_means = ATTE.mean_of_means(:trend,trend_cols,table_of_means)
+
+    liquidity_cols = [
+        :volumeZscore21day,
+        :amihud21day,
+        :lntrades
+    ]
+
+    table_of_means = ATTE.mean_of_means(:liquidity,liquidity_cols,table_of_means)
+
+    story_of_means_df = ATTE.story_of_means(table_of_means)
+
+
     # X: n × d data matrix
     # labels: vector of cluster assignments from GMM
 
     
 
+
+
+
+
+
+    ################################################### plotting
+
     
     ATTE.plotlyjs()
-    p = ATTE.plot() 
-    palette = ATTE.palette(:tab10)
-    for k in keys(clusters)
-        
-        for i = 1:1:length(clusters[k]["pca"][!,:row_idx])
-            #if (clusters[k]["pca"][!,:row_idx][i]+1==clusters[k]["pca"][!,:row_idx][i+1])
+    for cols in names(df_pca, ATTE.Not(:row_idx))
+        p = ATTE.plot() 
+        palette = ATTE.palette(:tab10)
 
-            ATTE.plot!(
-                    p,
-                    [clusters[k]["pca"][!,:row_idx][i], clusters[k]["pca"][!,:row_idx][i]+1],
-                    [0, 0],                   # y base
-                    ribbon=[10, 10], # height of the band
-                    color=palette[k],
-                    linecolor = palette[k],
-                    alpha=0.2,
-                    label="",                    
-                    legend = false)
-            #end
+        y_max=abs(maximum(df_pca[!,cols]))
+        y_min=abs(minimum(df_pca[!,cols]))
+        y_mnmx=maximum([y_min,y_max])
+        for k in keys(clusters)
+            
+            for i = 1:1:length(clusters[k]["pca"][!,:row_idx])
+                #if (clusters[k]["pca"][!,:row_idx][i]+1==clusters[k]["pca"][!,:row_idx][i+1])
+
+                ATTE.plot!(
+                        p,
+                        [clusters[k]["pca"][!,:row_idx][i], clusters[k]["pca"][!,:row_idx][i]+1],
+                        [0, 0],                   # y base
+                        ribbon=[y_mnmx, y_mnmx], # height of the band
+                        color=palette[k],
+                        linecolor = palette[k],
+                        alpha=0.2,
+                        label="",                    
+                        legend = false)
+                #end
+
+            end
 
         end
-
+        ATTE.plot!(
+            p,
+            df_pca[!,:row_idx],
+            df_pca[!,cols],
+            seriestype = :line,
+            color = :black,
+            linecolor = :black,
+            alpha = 1.0,
+            label = string(cols)
+        )
+        ATTE.display(p)
     end
-
-    ATTE.display(p)
 
 
 
