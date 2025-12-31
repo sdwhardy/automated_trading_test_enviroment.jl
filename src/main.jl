@@ -425,10 +425,10 @@
     X_proj = transpose(X_proj)  # now n × 2
 
     @assert size(X_proj, 1) == 2
-@assert size(X_proj, 2) == length(best_labels)
+@assert size(X_proj, 1) == length(best_labels)
 
-x = vec(X_proj[1, :])
-y = vec(X_proj[2, :])
+x = vec(X_proj[:,1])#[1, :])
+y = vec(X_proj[:,2])#, :])
     # Scatter plot colored by cluster
     ATTE.scatter(
         x, y,
