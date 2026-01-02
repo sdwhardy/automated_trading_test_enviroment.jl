@@ -273,3 +273,32 @@ function story_of_means(table_of_means)
     story_of_means_df
 
 end
+
+
+function sort_higherFreq_into_clusters(clusters, OHLCVT60_df)
+    
+    OHLCVT60_clusters = Dict{Any, DataFrame}()
+
+    for (cluster_k, cluster_v) in clusters
+       
+        OHLCVT60_clusters[cluster_k] = DataFrame()
+
+        for opening_bell in cluster_v["data"][!, :timestamp]
+       
+            closing_bell = opening_bell + 24*60*60
+
+            cluster = filter(
+                :timestamp => x -> (x >= opening_bell && x < closing_bell),
+                OHLCVT60_df
+            )
+
+            append!(OHLCVT60_clusters[cluster_k], cluster)
+       
+        end
+    
+    end
+    
+    return OHLCVT60_clusters
+
+end
+

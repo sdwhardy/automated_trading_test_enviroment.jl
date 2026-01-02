@@ -268,99 +268,46 @@
 
     new_max_k=length(unique(eachrow(story_of_means_df[!,ATTE.Not(:k)])))
 
-
-
-
-
-
-    
-    # Gaussian mixture model clustering 
-    best_k, best_gmm, best_bics = ATTE.select_k_bic(X; ks=2:new_max_k, kind=:diag)
-
-    post, _ = ATTE.gmmposterior(best_gmm, X)
-
-    best_labels = argmax.(eachrow(post))
-
-    entropy = ATTE.mean_entropy(post)# must be <0.3
-
-    m,s = ATTE.bootstrap_stability(X, best_k, best_labels; B=50)
-
-    println("Entropy: ", entropy)
-
-    for _k = 1:1:best_k
-        println(_k,": ", count(x -> x == _k, best_labels))#669 
-    end
-
-    println("Stability Mean: ", m, ", Std: ",s)
-
-    clusters = ATTE.data_into_clusters(OHLCVT_df, df_pca, best_labels)
-
-    table_of_means = ATTE.indicator_means_df(clusters,feature_cols)
-
     
 
-    direction_cols = [
-        :lnReturn1day,
-        :lnReturn5day,
-        :lnReturn21day,
-        :slnReturn1day,
-        :slnReturn5day,
-        :slnReturn21day,
-        :roc21day,
-        :roc63day
-    ]
+    # Load OHLCVT dataframe
+    interval = "60"
+    OHLCVT60_df = ATTE.get_pair_interval_df(pair, interval)
 
-    table_of_means = ATTE.mean_of_means(:direction,direction_cols,table_of_means)
-
-    volatility_cols = [
-        :realVol5day,
-        :realVol10day,
-        :realVol21day,
-        :gkVol21day
-    ]
-
-    table_of_means = ATTE.mean_of_means(:volatility,volatility_cols,table_of_means)
-
-    vol_of_vol_cols = [
-        :volOfVol21day
-    ]
-
-    table_of_means = ATTE.mean_of_means(:vol_of_vol,vol_of_vol_cols,table_of_means)
+    OHLCVT60_clusters = ATTE.sort_higherFreq_into_clusters(clusters, OHLCVT60_df)
 
 
-    trend_cols = [
-        :maDiff10_50day,
-        :maDiff20_100day,
-        :ema5MinusEma21,
-        :ema21MinusEma100,
-        :ema5daySlope,
-        :ema10daySlope,
-        :ema21daySlope
-    ]
 
-    table_of_means = ATTE.mean_of_means(:trend,trend_cols,table_of_means)
+    #Not validated as 4093 days are in 4083 rows and total of clusters + early data is 1 day short of expected total - likely a day is missing in daily data and result is correct
 
-    liquidity_cols = [
-        :volumeZscore21day,
-        :amihud21day,
-        :lntrades
-    ]
+    cluster_k=1;cluster_v=clusters[cluster_k]["data"]
 
-    table_of_means = ATTE.mean_of_means(:liquidity,liquidity_cols,table_of_means)
+    61271+12919+14072+1502
 
-    story_of_means_df = ATTE.story_of_means(table_of_means)
+    ts = clusters[2]["data"][!,:timestamp][end]#greater than or equal to
 
+    ts0 = OHLCVT_df[!,:timestamp][100]
+ts1 = OHLCVT_df[!,:timestamp][end]
 
-    # X: n × d data matrix
-    # labels: vector of cluster assignments from GMM
+    OHLCVT_df[!,:timestamp][end]-OHLCVT_df[!,:timestamp][100]
+    353635200/(24*60*60)
+    ts=ts+24*60*60#less than
+    
+    dt = (ATTE.unix2datetime(ts1)-ATTE.unix2datetime(ts0))/(1000*60*60*24)
 
     
-
-
-
-
-
-
+    ts = OHLCVT60_df[!,:timestamp][1]
+    dt = ATTE.unix2datetime(ts)
+    _min=ATTE.minimum([1465862400,1389744000,1391731200])
+    _max=ATTE.maximum([1742256000,1743379200,1541203200])
+    cluster = ATTE.filter(
+                :timestamp => x -> (x < _min),
+                OHLCVT60_df
+            )
+    cluster = ATTE.filter(
+                :timestamp => x -> (x > _max+24*60*60),
+                OHLCVT60_df
+            )
     ################################################### plotting
 
     
@@ -444,9 +391,9 @@ y = vec(X_proj[:,2])#, :])
 
  typeof(best_labels)#Vector{Int64}
 eltype(best_labels)#Int64
-#=ts = OHLCVT["XBTUSD"]["1440"]["df"][!,:timestamp][1]
-dt = unix2datetime(ts)
-dt_be = ZonedDateTime(dt, tz"Europe/Brussels")
+#=ts = OHLCVT60_df[!,:timestamp][]
+dt = ATTE.unix2datetime(ts)
+dt_be = ATTE.ZonedDateTime(dt, ATTE.tz"Europe/Brussels")
 println(dt_be)=#
 
 #=for col in cols
