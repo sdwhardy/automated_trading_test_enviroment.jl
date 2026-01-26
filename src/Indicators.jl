@@ -1023,3 +1023,124 @@ function validate_features(df::DataFrame, cols::Vector{Symbol}; std_tol=1e-3, me
 
     return results
 end
+
+
+function indicator_set(OHLCVT_df;indicator_args)
+    # --------------------------------------------------------------------------------------------------
+    # Feature engineering for clustering and regime analysis
+    # --------------------------------------------------------------------------------------------------
+    
+    # 1a) Log returns
+    #    ln(P_t / P_{t-n}) for multiple rolling horizons
+    if haskey(indicator_args,"logreturn")
+        for day in indicator_args["logreturn"]            
+            OHLCVT_df[!, Symbol("lnReturn$day"*"day")]  = logreturn(OHLCVT_df[!, :close], day)
+        end
+    end
+    
+    # 1b) signed Log returns
+    #    rt=ln(P_t / P_{t-n}) for multiple rolling horizons
+    #    sign(rt)*ln(1+abs(rt))
+    if haskey(indicator_args,"signed_logreturn")
+        for day in indicator_args["signed_logreturn"]                    
+            OHLCVT_df[!, Symbol("slnReturn$day"*"day")]  = signed_logreturn(OHLCVT_df[!, :close], day)
+        end
+    end
+    
+    # 2) Rate of Change (ROC)
+    #    (P_t - P_{t-n}) / P_{t-n}
+    if haskey(indicator_args,"roc")
+        for day in indicator_args["roc"]                    
+            OHLCVT_df[!, Symbol("roc$day"*"day")] = roc(OHLCVT_df[!, :close], day)
+        end
+    end
+
+    # 3) Realized volatility (annualized)
+    #    σ_n = sqrt(1/(n-1) * Σ (r_i - r̄)^2) * sqrt(252)
+    if haskey(indicator_args,"annualized_realized_volatility")
+        for day in indicator_args["annualized_realized_volatility"]                    
+            OHLCVT_df[!, Symbol("realVol$day"*"day")]  = annualized_realized_volatility(OHLCVT_df[!, :close], day)
+        end
+    end
+    
+    # 4) Garman–Klass volatility (21-day)
+    #    σ² = (1/n) Σ [0.5 ln(H/L)² − (2 ln 2 − 1) ln(C/O)²]
+    if haskey(indicator_args,"gk_volatility")
+        for day in indicator_args["gk_volatility"]
+            OHLCVT_df[!, Symbol("gkVol$day"*"day")] = gk_volatility(
+                OHLCVT_df[!, :open],
+                OHLCVT_df[!, :high],
+                OHLCVT_df[!, :low],
+                OHLCVT_df[!, :close],
+                day
+            )
+        end
+    end
+
+    # 5) Volatility-of-volatility
+    #    Standard deviation of realized volatility over a 21-day window
+    if haskey(indicator_args,"vol_of_vol")
+        for days in indicator_args["vol_of_vol"]
+            first_day=first(days)
+            last_day=last(days)
+            OHLCVT_df[!, Symbol("volOfVol$last_day"*"day")] = vol_of_vol(OHLCVT_df[!, :close], first_day, last_day)
+        end
+    end
+
+
+    # 6a) Moving-average differentials
+    if haskey(indicator_args,"ma_diff")
+        for days in indicator_args["ma_diff"]
+            first_day=first(days)
+            last_day=last(days)
+            OHLCVT_df[!, Symbol("maDiff$first_day"*"_"*"$last_day"*"day")]  = ma_diff(OHLCVT_df[!, :close], first_day, last_day)
+        end
+    end
+    
+
+    # 6b) Short term slope
+    if haskey(indicator_args,"short_term_slope")
+        for day in indicator_args["short_term_slope"]
+            OHLCVT_df[!, Symbol("stSlope$day"*"day")]=short_term_slope(OHLCVT_df[!, :close], day)
+        end
+    end
+
+    # 7) Volume Z-score
+    #    Z_n = (V_t − mean_n) / std_n
+    if haskey(indicator_args,"volume_zscore")
+        for day in indicator_args["volume_zscore"]
+            OHLCVT_df[!, Symbol("volumeZscore$day"*"day")] = volume_zscore(OHLCVT_df[!, :volume], day)
+        end
+    end
+
+    # 8) Amihud illiquidity (21-day average)
+    #    |P_t − P_{t−1}| / (P_{t−1} * P_t * V_t)
+    if haskey(indicator_args,"amihud")
+        for day in indicator_args["amihud"]
+            OHLCVT_df[!, Symbol("amihud$day"*"day")] = amihud(
+                OHLCVT_df[!, :close],
+                OHLCVT_df[!, :volume],
+                day
+            )
+        end
+    end
+
+    # 9) EMA difference
+    if haskey(indicator_args,"ema_diff")
+        for days in indicator_args["ema_diff"]
+            first_day=first(days)
+            last_day=last(days)
+            OHLCVT_df[!, Symbol("ema$first_day"*"MinusEma$last_day")] = ema_diff(OHLCVT_df[!, :close], first_day, last_day)#exponential moving average
+        end
+    end
+
+    # 10) EMA slope
+    if haskey(indicator_args,"ema_slope_normalized")
+        for day in indicator_args["ema_slope_normalized"]
+            OHLCVT_df[!, Symbol("ema$day"*"daySlope")] = ema_slope_normalized(OHLCVT_df[!, :close], day)
+        end
+    end
+
+    return OHLCVT_df
+
+end

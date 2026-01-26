@@ -105,3 +105,18 @@ function percent_explained_PCA(PC_scores_sorted,eigvals_sorted, nonmissing_idx; 
 
     return df_pca
 end
+
+function pca_set(OHLCVT_df, pca_cols; percent_explained=0.95)
+        
+    pca_dict = PCA(OHLCVT_df, pca_cols)
+
+    df_pca = percent_explained_PCA(
+        pca_dict["pca_df"],
+        pca_dict["eigen_values"],
+        pca_dict["nonmissing_idx"];
+        percent_explained=0.95
+    )
+
+    return df_pca 
+
+end
