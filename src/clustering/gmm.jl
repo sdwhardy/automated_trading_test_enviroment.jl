@@ -1,8 +1,3 @@
-include("clustering/general.jl")
-include("clustering/gmm.jl")
-include("clustering/kmeans.jl")
-
-#=
 """
 loglikelihood(gmm::GMM, X::Matrix{Float64}) -> Float64
 
@@ -182,6 +177,47 @@ function mean_entropy(post)
     return mean(-sum(p .* log.(p .+ eps())) for p in eachrow(post))
 end
 
+"""
+    bootstrap_stability(X, k, ref_labels; B=50) -> (mean_score, std_score)
+
+Estimate clustering stability using bootstrap resampling and the Rand index.
+
+This function evaluates how stable a Gaussian Mixture Model (GMM) clustering
+with `k` components is under bootstrap resampling of the data. For each bootstrap
+replicate, a GMM is fitted to a resampled dataset and the resulting clustering
+is compared to a reference labeling using the Rand index.
+
+# Arguments
+- `X`: A matrix of size `(n_samples, n_features)` containing the input data.
+- `k`: Number of mixture components (clusters) for the GMM.
+- `ref_labels`: Vector of reference cluster labels of length `n_samples`,
+  used as the baseline for stability comparison.
+- `B`: Number of bootstrap replicates (default: `50`).
+
+# Returns
+- `mean_score::Float64`: Mean Rand index across valid bootstrap runs.
+- `std_score::Float64`: Standard deviation of the Rand index across runs.
+
+# Method
+For each bootstrap iteration:
+1. Rows of `X` are resampled with replacement.
+2. A diagonal-covariance GMM is fitted using EM.
+3. Posterior cluster probabilities are evaluated on the *original* dataset `X`.
+4. Hard labels are assigned via maximum posterior probability.
+5. The Rand index is computed against `ref_labels`.
+
+Bootstrap runs producing degenerate covariance matrices
+(`NaN` values or variances below `1e-8`) are discarded.
+
+# Notes
+- Stability is measured relative to the provided reference labeling, not
+  pairwise between bootstrap runs.
+- Missing or ill-conditioned covariance estimates reduce the effective
+  sample size used in the final statistics.
+- The Rand index reported corresponds to the *second* output of `randindex`,
+  i.e. the adjusted or normalized variant, depending on implementation.
+
+"""
 function bootstrap_stability(X, k, ref_labels; B=50)
     
     scores = Float64[]
@@ -204,119 +240,50 @@ function bootstrap_stability(X, k, ref_labels; B=50)
 
 end   
 
+"""
+    k_gmm_clusters(df_pca, k) -> Dict{String, Any}
 
-function data_into_clusters(OHLCVT_df, df_pca, labels)
-    
-    cluster_numbers=Dict()
-    dict_keys=unique(labels)
-    for v in dict_keys
-        if !haskey(cluster_numbers,v)
-            push!(cluster_numbers,v=>Dict("data"=>DataFrame(),"pca"=>DataFrame()))
-        end 
-    end
+Fit a Gaussian Mixture Model (GMM) with `k` components to PCA-transformed data
+and evaluate clustering quality and stability.
 
-    for (i,v) in enumerate(labels)
-        push!(cluster_numbers[v]["pca"],df_pca[i, :])
-        push!(cluster_numbers[v]["data"],OHLCVT_df[df_pca[!,:row_idx][i], :])
-    end
+This function applies diagonal-covariance GMM clustering to a PCA feature
+DataFrame, computes hard cluster assignments, and reports multiple quality
+metrics including entropy and bootstrap stability.
 
-    return cluster_numbers
+# Arguments
+- `df_pca`: A `DataFrame` containing PCA features. All columns except `:row_idx`
+  are treated as numeric input features.
+- `k`: Number of mixture components to fit. Internally passed as a fixed range
+  `k:k` to BIC-based model selection.
 
-end
+# Returns
+A `Dict{String, Any}` with the following keys:
+- `"best_k"`: Selected number of clusters (equal to `k`).
+- `"best_labels"`: Vector of hard cluster labels assigned to each observation.
+- `"m"`: Mean Rand index from bootstrap stability analysis.
+- `"s"`: Standard deviation of the Rand index from bootstrap stability analysis.
+- `"entropy"`: Mean posterior entropy across observations.
+- `"bic"`: Bayesian Information Criterion (BIC) value of the fitted model.
 
-function indicator_means_df(clusters,feature_cols)
-    table_of_means=DataFrame(feature_cols .=> Ref(Float64[]))
-    insertcols!(table_of_means, 1, :k => Int64[])
-    for k in keys(clusters)
-        cols_means=[]
-        push!(cols_means,k)
-        for col in feature_cols
+# Method
+1. Extract numeric PCA features from `df_pca`.
+2. Fit a diagonal-covariance GMM using EM.
+3. Select the model via BIC (degenerate here since `k` is fixed).
+4. Compute posterior probabilities and assign hard labels.
+5. Evaluate clustering entropy as a measure of assignment confidence.
+6. Estimate clustering stability via bootstrap resampling.
 
-            push!(cols_means,mean(clusters[k]["data"][!,col]))
+# Side Effects
+- Prints entropy, per-cluster sample counts, and bootstrap stability statistics
+  to standard output.
 
-        end
+# Notes
+- The entropy threshold (`< 0.3`) is not enforced programmatically and is
+  provided as a guideline only.
+- The function assumes `df_pca` contains no missing values in feature columns.
+- Stability is measured relative to the clustering obtained on the full dataset.
 
-        push!(table_of_means,cols_means)
-    end
-    return table_of_means
-end
-
-function mean_of_means(col_name,cols,df)
-        
-    df[!,col_name]=mean.(eachrow(df[!,cols]))
-
-    return df
-
-end
-
-
-
-
-function story_of_means(table_of_means)
-
-    means_of_means_cols=[:direction,:volatility, :vol_of_vol, :trend, :liquidity]
-
-    story_of_means_df=DataFrame(means_of_means_cols .=> Ref(String[]))
-    
-    insertcols!(story_of_means_df, 1, :k => Int64[])
-
-    for _row in eachrow(table_of_means)
-
-        new_row=[]
-
-        push!(new_row,_row[:k])
-
-        for _col in means_of_means_cols
-
-            _sign = "0"
-
-            _sign = _row[_col] <= -0.5 ? "-" : _sign
-
-            _sign = _row[_col] >= 0.5 ? "+" : _sign
-
-            push!(new_row,_sign)
-            
-        end
-
-        push!(story_of_means_df,new_row)
-
-    end
-
-    story_of_means_df
-
-end
-
-
-function sort_higherFreq_into_clusters(clusters, OHLCVT60_df)
-    
-    OHLCVT60_clusters = Dict{Any, DataFrame}()
-
-    for (cluster_k, cluster_v) in clusters
-       
-        OHLCVT60_clusters[cluster_k] = DataFrame()
-
-        for opening_bell in cluster_v["data"][!, :timestamp]
-       
-            closing_bell = opening_bell + 24*60*60
-
-            cluster = filter(
-                :timestamp => x -> (x >= opening_bell && x < closing_bell),
-                OHLCVT60_df
-            )
-
-            append!(OHLCVT60_clusters[cluster_k], cluster)
-       
-        end
-    
-    end
-    
-    return OHLCVT60_clusters
-
-end
-
-
-
-
+"""
 function k_gmm_clusters(df_pca,k)
 
     X = Matrix(df_pca[:, Not(:row_idx)])
@@ -344,71 +311,57 @@ function k_gmm_clusters(df_pca,k)
 
 end
 
+"""
+    select_best_gmm(gmm_results; entropy_weight=100.0, max_entropy=0.35)
+        -> (cluster_number, iteration, score)
 
-function calculate_cluster_means(clusters,feature_cols)
+Select the best Gaussian Mixture Model (GMM) configuration based on a
+BIC–entropy trade-off.
 
-    table_of_means = indicator_means_df(clusters,feature_cols)
+This function scans a nested results dictionary containing multiple GMM
+configurations and selects the model that minimizes a composite score
+defined as:
 
-    direction_cols = [
-        :lnReturn1day,
-        :lnReturn5day,
-        :lnReturn21day,
-        :slnReturn1day,
-        :slnReturn5day,
-        :slnReturn21day,
-        :roc21day,
-        :roc63day
-    ]
-
-    table_of_means = mean_of_means(:direction,direction_cols,table_of_means)
-
-    volatility_cols = [
-        :realVol5day,
-        :realVol10day,
-        :realVol21day,
-        :gkVol21day
-    ]
-
-    table_of_means = mean_of_means(:volatility,volatility_cols,table_of_means)
-
-    vol_of_vol_cols = [
-        :volOfVol21day
-    ]
-
-    table_of_means = mean_of_means(:vol_of_vol,vol_of_vol_cols,table_of_means)
+score = BIC + entropy_weight * entropy
 
 
-    trend_cols = [
-        :maDiff10_50day,
-        :maDiff20_100day,
-        :stSlope3day,
-        :stSlope10day,
-        :stSlope21day,
-        :ema5MinusEma21,
-        :ema21MinusEma100,
-        :ema5daySlope,
-        :ema10daySlope,
-        :ema21daySlope
-    ]
+subject to an upper bound on acceptable clustering entropy.
 
-    table_of_means = mean_of_means(:trend,trend_cols,table_of_means)
+# Arguments
+- `gmm_results`: A nested dictionary indexed as
+  `gmm_results[K][iter]`, where each leaf entry contains a dictionary
+  under the key `"gmm_clusters"` with at least:
+  - `"bic"`: Bayesian Information Criterion value (`Float64`)
+  - `"entropy"`: Mean posterior entropy (`Float64`)
+- `entropy_weight`: Weight applied to entropy in the composite score
+  (default: `100.0`).
+- `max_entropy`: Maximum allowed entropy for a configuration to be
+  considered valid (default: `0.35`).
 
-    liquidity_cols = [
-        :volumeZscore21day,
-        :amihud21day,
-        :lntrades
-    ]
+# Returns
+A named tuple with fields:
+- `cluster_number`: Selected number of clusters `K`.
+- `iteration`: Iteration index corresponding to the selected model.
+- `score`: Composite score of the selected configuration.
 
-    table_of_means = mean_of_means(:liquidity,liquidity_cols,table_of_means)
+# Selection Rules
+- Configurations with non-finite BIC or entropy are discarded.
+- Configurations with entropy greater than `max_entropy` are discarded.
+- Among remaining candidates, the configuration minimizing the composite
+  score is selected.
 
-    story_of_means_df = story_of_means(table_of_means)
+# Errors
+- Throws an error if no valid GMM configuration satisfies the selection
+  criteria.
 
-    return table_of_means, story_of_means_df
+# Notes
+- The weighting scheme implicitly prioritizes BIC while penalizing
+  uncertain cluster assignments via entropy.
+- The choice of `entropy_weight` and `max_entropy` is application-specific
+  and should be tuned empirically.
+- This function assumes lower BIC and lower entropy are both preferable.
 
-    #return table_of_means
-
-end
-
+"""
 function select_best_gmm(gmm_results::Dict{Any,Any};
     entropy_weight::Float64 = 100.0,
     max_entropy::Float64 = 0.35
@@ -448,130 +401,6 @@ function select_best_gmm(gmm_results::Dict{Any,Any};
         cluster_number = best_K,
         iteration = best_iter,
         score = best_score
-    )
-end
-
-
-"""
-Collapse statistically indistinguishable GMM clusters.
-
-Inputs:
-- table_of_means :: DataFrame
-- feature_cols   :: Vector{Symbol}
-- eps            :: Float64   (merge threshold)
-
-Returns:
-- effective_K :: Int
-- cluster_map :: Dict{Int,Int}  (original -> collapsed)
-"""
-function statistic_collapse_clusters(
-    table_of_means::DataFrame;
-    feature_cols::Vector{Symbol},
-    eps::Float64 = 0.30
-)
-    K = nrow(table_of_means)
-    d = length(feature_cols)
-
-    # extract mean matrix
-    M = Matrix(table_of_means[:, feature_cols])
-
-    # pairwise distance matrix
-    D = zeros(K, K)
-    for i in 1:K, j in i+1:K
-        D[i, j] = norm(M[i, :] .- M[j, :]) / sqrt(d)
-        D[j, i] = D[i, j]
-    end
-
-    # union-find for merging
-    parent = collect(1:K)
-
-    find(x) = parent[x] == x ? x : (parent[x] = find(parent[x]))
-    function union(x, y)
-        px, py = find(x), find(y)
-        px != py && (parent[py] = px)
-    end
-
-    # merge close clusters
-    for i in 1:K, j in i+1:K
-        if D[i, j] < eps
-            union(i, j)
-        end
-    end
-
-    # build collapsed mapping
-    roots = unique(find.(1:K))
-    collapsed_id = Dict(r => i for (i, r) in enumerate(roots))
-
-    cluster_map = Dict(i => collapsed_id[find(i)] for i in 1:K)
-
-    return (
-        effective_K = length(roots),
-        merge_map = cluster_map,
-        distance_matrix = D
-    )
-end
-
-
-"""
-Collapse GMM clusters that are semantically equivalent.
-
-Arguments
----------
-table_of_means :: DataFrame
-    Rows = clusters
-    Must contain semantic columns with values in {-1, 0, +1}
-k_col :: Symbol
-    Cluster identifier column
-semantic_cols :: Vector{Symbol}
-    Columns defining regime semantics
-
-Returns
--------
-(
-  effective_k,
-  merge_map,
-  semantic_groups
-)
-"""
-
-function semantic_collapse_clusters(
-    table_of_means;
-    k_col::Symbol = :k,
-    semantic_cols::Vector{Symbol} = [
-        :direction, :volatility, :vol_of_vol, :trend, :liquidity
-    ]
-)
-    clusters = table_of_means[:, k_col]
-
-    # semantic signature for each cluster
-    signatures = Dict{Int, Tuple}()
-
-    for i in 1:nrow(table_of_means)
-        k = clusters[i]
-        signatures[k] = Tuple(table_of_means[i, semantic_cols])
-    end
-
-    # group clusters by identical semantic signature
-    groups = Dict{Tuple, Vector{Int}}()
-    for (k, sig) in signatures
-        push!(get!(groups, sig, Int[]), k)
-    end
-
-    # representative = smallest cluster id (stable)
-    merge_map = Dict{Int,Int}()
-    for group in values(groups)
-        rep = minimum(group)
-        for k in group
-            merge_map[k] = rep
-        end
-    end
-
-    semantic_groups = collect(values(groups))
-
-    return (
-        effective_k = length(semantic_groups),
-        merge_map = merge_map,
-        groups = semantic_groups
     )
 end
 
@@ -650,67 +479,45 @@ function k_clusters_i_times(
     return gmm_results
 end
 
+"""
+    gmm_cluster_set(df_pca, OHLCVT_df, pca_cols)
 
-function merge_clusters(result, best_run)
+Compute multiple GMM clustering configurations and return the best-performing
+cluster set based on BIC–entropy selection.
 
-    collapsed_cluster=Dict()
+This function runs Gaussian Mixture Model (GMM) clustering for a fixed number
+of clusters and repeated initializations, evaluates all configurations, and
+returns the clustering payload corresponding to the best configuration as
+determined by `select_best_gmm`.
 
-    for (k,v) in result.merge_map
+# Arguments
+- `df_pca`: `DataFrame` containing PCA-transformed features used for clustering.
+- `OHLCVT_df`: `DataFrame` containing associated time-series or market data
+  (e.g. Open, High, Low, Close, Volume, Time), passed through to downstream
+  clustering routines.
+- `pca_cols`: Vector of column names in `df_pca` identifying the PCA features
+  to be used in clustering.
 
-        if !(haskey(collapsed_cluster,v))
+# Returns
+- A dictionary (or payload object) corresponding to a single GMM configuration,
+  as produced by `k_clusters_i_times`, containing clustering results and
+  diagnostics (e.g. labels, entropy, BIC).
 
-            push!(collapsed_cluster,v=>best_run[k])
+# Method
+1. Generate GMM clustering results for a fixed cluster count (`_k = 5`)
+   and multiple initializations (`_i = 5`).
+2. Evaluate all configurations using `select_best_gmm`, which balances
+   BIC and entropy.
+3. Return the clustering result corresponding to the selected configuration.
 
-        else
+# Notes
+- The number of clusters and iterations are currently hard-coded
+  (`_k = 5`, `_i = 5`).
+- No validation is performed on the structure of the returned payload; it is
+  assumed to be compatible with `select_best_gmm`.
+- Any printing or logging behavior occurs in downstream functions.
 
-            collapsed_cluster[v]["data"]=sort(vcat(collapsed_cluster[v]["data"],best_run[k]["data"]), :timestamp)
-
-            collapsed_cluster[v]["pca"]=sort(vcat(collapsed_cluster[v]["pca"],best_run[k]["pca"]), :row_idx)
-
-        end
-
-    end
-
-    return collapsed_cluster
-
-end
-
-
-
-
-function mean_silhouette(X, labels)
-
-    S = silhouettes(labels, X; metric = SqEuclidean())
-
-    return mean(S)
-
-end
-
-function clustering_stability(X, k; trials=8)
-
-    label_sets = Vector{Vector{Int}}()
-
-    for _ in 1:trials
-
-        R = kmeans(X, k; maxiter=300, init=:rand)
-
-        push!(label_sets, R.assignments)
-
-    end
-
-
-    agreements = Float64[]
-
-    for i in 1:length(label_sets), j in i+1:length(label_sets)
-
-        push!(agreements, mean(label_sets[i] .== label_sets[j]))
-
-    end
-
-    return mean(agreements)
-
-end
-
+"""
 function gmm_cluster_set(df_pca,OHLCVT_df, pca_cols)
             
     gmm_results=k_clusters_i_times(df_pca,OHLCVT_df, pca_cols;_k=5, _i=5)
@@ -721,75 +528,3 @@ function gmm_cluster_set(df_pca,OHLCVT_df, pca_cols)
 
 end
 
-function collapse_clusters(clusters, table_of_means, cols)
-
-    result = statistic_collapse_clusters(table_of_means; feature_cols = cols, eps = 0.3)
-
-    collapsed_cluster = merge_clusters(result, clusters)
-    
-    table_of_means, story_of_means_df = calculate_cluster_means(collapsed_cluster,cols)
-    
-    result = semantic_collapse_clusters(story_of_means_df)
-
-    collapsed_cluster = merge_clusters(result, collapsed_cluster)
-    
-    table_of_means, story_of_means_df = calculate_cluster_means(collapsed_cluster, cols)
-    
-    println(story_of_means_df)
-
-    return collapsed_cluster
-
-end
-
-
-function best_k4k_means(df_pca; n_restarts = 8, stability_thresh = 0.85, min_sil_gain = 0.03) 
-    # Extract PCA features only (drop row_idx)
-    X = Matrix(df_pca[:, Not(:row_idx)])'   # 5650 × 8
-
-    # Clustering.jl expects features × samples
-    n_points = size(X, 2)         # number of samples
-
-    ks = 2:min(10, n_points)      # ensure k never exceeds N # hard cap per your use case
-
-    results = Dict{Int,Tuple{Float64,Float64}}()
-
-    for k in ks
-        R = kmeans(X, k; maxiter=300, init=:rand)
-        sil = mean_silhouette(X, R.assignments)
-        stab = clustering_stability(X, k; trials=n_restarts)
-        results[k] = (sil, stab)
-    end
-
-    # Filter by stability
-    valid = filter(k -> results[k][2] ≥ stability_thresh, ks)
-
-    if isempty(valid)
-        # fallback: smallest k with max stability
-        best_k = argmax(k -> results[k][2], ks)
-    else
-        # choose smallest k with max silhouette among stable ones
-        best_k = argmax(k -> results[k][1], valid)
-    end
-
-    if results[best_k][1] < min_sil_gain
-        best_k = 1
-    end
-
-    return best_k
-    
-end
-
-
-function k_means_set(df_pca, best_k, OHLCVT)
-
-    # Extract PCA features only (drop row_idx)
-    X = Matrix(df_pca[:, Not(:row_idx)])'   # 5650 × 8
-
-    #k means is working but untested and still no validation of picking best clusters (eg is 1 better than the 2 found?)
-    R = kmeans(X, best_k; maxiter=300, init=:rand)
-
-    kmeans_cluster=data_into_clusters(OHLCVT, df_pca, R.assignments)
-
-    return kmeans_cluster
-
-end=#

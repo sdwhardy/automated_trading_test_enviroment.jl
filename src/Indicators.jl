@@ -1144,3 +1144,64 @@ function indicator_set(OHLCVT_df;indicator_args)
     return OHLCVT_df
 
 end
+
+"""
+    indicator_means_df(clusters, feature_cols) -> DataFrame
+
+Compute the mean value of selected indicator features for each cluster.
+
+# Arguments
+- `clusters`: A dictionary-like object indexed by cluster identifiers (`k`),
+  where each entry contains a `"data"` field holding a `DataFrame`.
+- `feature_cols`: A vector of column names (`Symbol` or `String`) corresponding
+  to numeric indicator features for which means are computed.
+
+# Returns
+- `DataFrame`: A table where each row corresponds to one cluster.
+  The first column `:k` contains the cluster identifier, and each subsequent
+  column contains the mean value of the corresponding feature in `feature_cols`.
+
+# Notes
+- All feature columns are assumed to contain numeric data compatible with `mean`.
+- Missing values are **not** handled explicitly; if present, `mean` will error
+  unless `skipmissing` is applied upstream.
+
+"""
+function indicator_means_df(clusters, feature_cols)
+    # Initialize output DataFrame with correct column types
+    table_of_means = DataFrame(
+    :k => Int[],
+    (col => Float64[] for col in feature_cols)...
+    )
+
+    for k in keys(clusters)
+        data = clusters[k]["data"]
+
+        row = (
+            k,
+            (mean(data[!, col]) for col in feature_cols)...
+        )
+
+        push!(table_of_means, row)
+    end
+
+    return table_of_means
+end
+
+############ REMOVE AFTER VALIDATING #######################
+#=function indicator_means_df(clusters,feature_cols)
+    table_of_means=DataFrame(feature_cols .=> Ref(Float64[]))
+    insertcols!(table_of_means, 1, :k => Int64[])
+    for k in keys(clusters)
+        cols_means=[]
+        push!(cols_means,k)
+        for col in feature_cols
+
+            push!(cols_means,mean(clusters[k]["data"][!,col]))
+
+        end
+
+        push!(table_of_means,cols_means)
+    end
+    return table_of_means
+end=#

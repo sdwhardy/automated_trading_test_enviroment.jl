@@ -14,24 +14,24 @@
 // ----------------------------
 // Title
 // ----------------------------
-= Technical Manual  
+//= Technical Manual  
 #datetime.today()
 
 // ----------------------------
 // Abstract (optional)
 // ----------------------------
-== Abstract
+= Abstract
 This document briefly describes the purpose of the work.
 
 // ----------------------------
 // Main sections
 // ----------------------------
-== Introduction
+= Introduction
 Introduce the problem, background, and motivation.
 
-== Indicators
+= Indicators
 
-=== Logarithmic Returns
+== Logarithmic Returns
 The logarithmic return measures the relative change in an asset’s price
 using the natural logarithm. It is time-additive and symmetric for gains and losses.
 
@@ -47,7 +47,7 @@ Log-returns are preferred in many statistical and optimization models
 because cumulative returns over multiple periods can be obtained by
 simple summation.
 
-=== Signed Logarithmic Returns
+== Signed Logarithmic Returns
 The signed logarithmic return $(r_t^s)$ is defined as:
 
 $ r_t^s = (r_t >= 0 ? 1 : -1) dot log(1 + abs(r_t)) $
@@ -58,7 +58,7 @@ Properties:
 - Behaves approximately linearly near zero.
 - Improves numerical stability for PCA and feature standardization.
 
-=== Rate of Change (ROC)
+== Rate of Change (ROC)
 
 The ROC measures the relative change in an asset's
 price over $n$ periods. It is commonly used as a momentum indicator
@@ -72,7 +72,7 @@ ROC values indicate:
 - Positive: price has increased over the period
 - Negative: price has decreased over the period
 
-=== Daily Realized Volatility
+== Daily Realized Volatility
 
 Daily realized volatility is a backward-looking measure of market
 variability based on observed price movements. It is computed from
@@ -91,7 +91,7 @@ This estimator captures the magnitude of recent price fluctuations and
 is widely used as a proxy for true (latent) volatility in empirical
 finance.
 
-=== Annualized Realized Volatility
+== Annualized Realized Volatility
 
 Annualized realized volatility rescales daily realized volatility to a
 yearly horizon under the assumption that daily returns are independent
@@ -107,7 +107,7 @@ where $A$ is the number of trading periods per year, typically $A = 252$.
 This transformation enables direct comparison of volatility estimates
 across assets and time horizons.
 
-=== Garman–Klass Volatility
+== Garman–Klass Volatility
 
 The Garman–Klass volatility estimator is a range-based measure that
 uses daily open, high, low, and close prices to estimate volatility
@@ -129,7 +129,7 @@ This estimator is unbiased under zero drift and is statistically more
 efficient than close-to-close volatility when intraday price ranges
 are informative.
 
-=== Volatility of Volatility (VoV)
+== Volatility of Volatility (VoV)
 
 VoV measures how unstable or variable
 market volatility itself is over time. Rather than focusing on price
@@ -152,7 +152,7 @@ associated with regime shifts, market stress, or heightened uncertainty.
 Volatility of volatility is widely used in volatility modeling, risk
 control, and derivative pricing applications.
 
-=== Moving Average Difference
+== Moving Average Difference
 
 The moving average difference compares short-term and long-term price
 trends by subtracting a long-term moving average from a short-term one.
@@ -175,7 +175,7 @@ Positive values of $D_t$ indicate that short-term prices exceed the
 long-term trend, suggesting upward momentum, while negative values
 indicate downward momentum.
 
-=== Short-Term Price Slope
+== Short-Term Price Slope
 
 The short-term slope measures the local linear trend of prices over a rolling
 window of $n$ observations.
@@ -203,7 +203,7 @@ positive values indicate upward trends, while negative values indicate downward
 trends. This indicator is typically z-score standardized before use in PCA or
 clustering.
 
-=== Exponential Moving Average (EMA)
+== Exponential Moving Average (EMA)
 
 Let $P_t$ denote the price at time step $t$.
 The exponential moving average with window length $n$ is defined recursively.
@@ -222,7 +222,7 @@ Values for $t < n$ are undefined and treated as missing.
 This formulation assigns exponentially decreasing weights to older observations,
 giving greater importance to recent prices while maintaining smoothness.
 
-=== Exponential Moving Average Difference
+== Exponential Moving Average Difference
 
 Let $P_t$ denote the price at time index $t$.
 For two window lengths $n_s$ (short) and $n_l$ (long) with $n_s < n_l$,
@@ -236,7 +236,7 @@ If either EMA is undefined at time $t$, then $D_t$ is undefined.
 This indicator measures short-term momentum relative to a longer-term
 trend and is commonly used to detect trend direction and regime changes.
 
-=== EMA Slope
+== EMA Slope
 
 Let $E_t$ denote the exponential moving average with window length $n$.
 The EMA slope is defined as the first forward difference:
@@ -250,7 +250,7 @@ $ S_t = (E_t - E_(t-1)) / E_(t-1) $
 Values for $t <= n$ are undefined.
 This measures the instantaneous rate of change of the smoothed price series.
 
-=== Volume Z-Score
+== Volume Z-Score
 
 The volume z-score measures how abnormal current trading volume is
 relative to recent historical levels. It expresses volume deviations in
@@ -272,7 +272,7 @@ $ Z_t = (V_t - mu_t) / sigma_t $
 Large positive values of $Z_t$ indicate unusually high volume, often
 associated with information arrival, breakouts, or regime changes.
 
-=== Amihud Illiquidity Measure
+== Amihud Illiquidity Measure
 
 The Amihud illiquidity measure quantifies market liquidity by relating
 price movements to trading volume. It captures the idea that illiquid
@@ -296,15 +296,15 @@ $ A_t = (1 / n) dot sum(I_(t-i)), quad i = 1, dots, n $
 
 Higher values of $A_t$ indicate lower liquidity, as prices react more
 strongly to a given level of trading activity.
-== Normalization
-=== Nonlinear Pre-Standardization Transforms
+= Normalization
+== Nonlinear Pre-Standardization Transforms
 
 Before applying Z-score standardization, selected variables are transformed
 to reduce skewness, stabilize variance, and limit the influence of extreme
 values. This improves numerical stability and interpretability prior to
 mean–variance scaling.
 
-=== Signed Logarithmic Transform
+== Signed Logarithmic Transform
 
 For ROC, a signed logarithmic transform is applied.
 
@@ -326,7 +326,7 @@ This transform has the following properties:
 It is well suited for financial return series, which often exhibit heavy
 tails and outliers.
 
-=== Logarithmic Transform (Amihud Illiquidity)
+== Logarithmic Transform (Amihud Illiquidity)
 
 The Amihud illiquidity measure is strictly non-negative and typically
 right-skewed. A standard logarithmic compression is therefore applied.
@@ -338,13 +338,13 @@ $ a = ln(1 + A_t) $
 Adding 1 ensures the transform is well-defined at zero and avoids numerical
 instability.
 
-=== Interaction with Z-Score Standardization
+== Interaction with Z-Score Standardization
 
 These nonlinear transforms are applied prior to Z-score standardization.
 Their purpose is not to enforce normality, but to produce distributions
 that are better behaved under mean–variance scaling.
 
-== Z-Score Standardization
+= Z-Score Standardization
 
 Z-score standardization rescales data so that each variable has zero mean
 and unit variance. This transformation makes variables comparable across
@@ -367,13 +367,13 @@ is replaced by 1 to ensure numerical stability.
 Z-score standardization removes scale effects while preserving the
 relative structure of the data.
 
-== Principle Component Analysis
+= Principle Component Analysis
 
 PCA is used to transform a set of correlated features into an orthogonal
 basis ordered by explained variance. In this pipeline, PCA is applied after
 Z-score normalization.
 
-=== 1. Missing-value filtering
+== 1. Missing-value filtering
 
 Let $X$ denote a data matrix with $N$ rows and $d$ features.
 Each row corresponds to one observation, and each column corresponds
@@ -389,7 +389,7 @@ The filtered data matrix is denoted by $X_I$.
 
 Principal Component Analysis (PCA) is performed exclusively on $X_I$.
 
-=== 2. Centering
+== 2. Centering
 
 Each feature is centered by subtracting its sample mean:
 
@@ -402,7 +402,7 @@ $ mu = (1 / N) · ∑_(i=1)^N X_i $
 Even though features are already standardized, explicit centering ensures
 numerical stability.
 
-=== 3. Covariance matrix
+== 3. Covariance matrix
 
 The sample covariance matrix is computed as:
 
@@ -410,7 +410,7 @@ $ Sigma(j,k) = (1 / (N - 1)) · ∑_(i=1)^N X_c(i,j) · X_c(i,k) $
 
 This captures the linear dependence structure between features.
 
-=== 4. Eigen decomposition
+== 4. Eigen decomposition
 
 The covariance matrix is decomposed as:
 
@@ -424,7 +424,7 @@ Eigenvalues are sorted in descending order:
 
 $ lambda_1 ≥ lambda_2 ≥ lambda_3 ≥ … ≥ lambda_d $
 
-=== 5. Projection onto principal components
+== 5. Projection onto principal components
 
 Principal component scores are obtained via:
 
@@ -437,7 +437,7 @@ where $ V = [v_1, v_2, dots, v_d] $.
 Each column of $Z$ represents a principal component, with variance equal
 to its corresponding eigenvalue.
 
-=== 6. Properties
+== 6. Properties
 
 - Principal components are uncorrelated
 - Total variance is preserved:
@@ -449,9 +449,9 @@ $ ∑_(k=1)^d lambda_k = tr(Sigma) $
 
 $ X_c ≈ Z · V^T $
 
-== Clustering
+= Clustering
 
-=== Gaussian Mixture Models and Log-Likelihood
+== Gaussian Mixture Models and Log-Likelihood
 
 Let
 $X = { x_1, x_2, ..., x_n } subset RR^d$
@@ -483,7 +483,7 @@ $
 Maximizing this quantity corresponds to fitting the model parameters to
 the observed data.
 
-=== Bayesian Information Criterion (BIC)
+== Bayesian Information Criterion (BIC)
 
 Model selection requires balancing goodness of fit with model complexity.
 The Bayesian Information Criterion (BIC) provides such a trade-off.
@@ -508,7 +508,7 @@ $
 Lower BIC values indicate a better compromise between fit quality and
 model complexity.
 
-=== Selecting the Number of Clusters
+== Selecting the Number of Clusters
 
 Let $K$ denote a set of candidate cluster counts.
 
@@ -611,8 +611,9 @@ $
 
 Lower entropy indicates more confident (well-separated) cluster
 assignments, while higher entropy suggests greater overlap or ambiguity.
-
-== Conclusion
+== K means
+//Add K means description here...
+= Conclusion
 Summarize findings and next steps.
 
 // ----------------------------
