@@ -611,8 +611,122 @@ $
 
 Lower entropy indicates more confident (well-separated) cluster
 assignments, while higher entropy suggests greater overlap or ambiguity.
+
 == K means
-//Add K means description here...
+Let
+$X ∈ ℝ^{n × d}$ be the matrix of PCA-transformed observations, where
+$n$ is the number of samples and $d$ the number of retained principal
+components.
+
+Given a fixed number of clusters $k$, the k-means algorithm solves
+
+$
+min_(C_1, …, C_k) sum_(j=1)^k sum_(x_i ∈ C_j) ‖x_i - μ_j‖_2^2
+$
+
+where:
+- $C_j$ denotes the set of points assigned to cluster $j$
+- $μ_j$ is the centroid of cluster $j$, defined as
+$
+μ_j = (1/(|C_j|)) sum_(x_i ∈ C_j) x_i
+$
+
+The algorithm proceeds iteratively:
+1. Initialize centroids $μ_1, …, μ_k$ at random.
+2. Assign each observation $x_i$ to the nearest centroid:
+$
+"assign"(x_i) = "argmin"_j ‖x_i - μ_j‖_2
+$
+3. Update centroids using the mean of assigned points.
+4. Repeat steps 2–3 until convergence or a maximum number of iterations.
+
+=== Silhouette coefficient
+
+Let $X = {x_1, …, x_n}$ be a set of observations partitioned into clusters
+$C_1, …, C_k$.
+
+For a given observation $x_i$ assigned to cluster $C_a$:
+
+- *intra-cluster distance*
+Let d(x_i, x_j) denote a distance metric between two observations.
+$
+d(x_i, x_j) = ‖x_i - x_j‖_2^2
+$
+- then the intra-cluster distance is:
+$
+a(i) = (1 / (|C_a| - 1)) sum_(x_j ∈ C_a, j ≠ i) d(x_i, x_j)
+$
+
+- For every other cluster $C_b$, compute the mean distance
+$
+D(i, C_b) = (1 / (|C_b|)) sum_(x_j ∈ C_b) d(x_i, x_j)
+$
+
+- Let
+$
+b(i) = min_(b ≠ a) D(i, C_b)
+$
+
+The silhouette coefficient of $x_i$ is then defined as:
+$
+s(i) = (b(i) - a(i)) / max(a(i), b(i))
+$
+
+By construction:
+$
+-1 ≤ s(i) ≤ 1
+$
+
+The *mean silhouette score* is given by:
+$
+S = (1 / n) sum_(i=1)^n s(i)
+$
+
+==== Usage
+
+The silhouette coefficient is used to:
+- Evaluate clustering quality without ground-truth labels
+- Compare different values of $k$ in clustering algorithms
+- Detect poorly assigned or ambiguous observations
+
+Higher values indicate better-separated and more cohesive clusters.
+
+== Clustering stability via repeated k-means
+
+Let $X = {x_1, …, x_n}$ be a dataset and let $k$ be the number of clusters.
+
+Define $L^(t) = (l_1^(t), …, l_n^(t))$ as the vector of cluster assignments
+obtained from the $t$-th run of k-means with random initialization, where
+$t = 1, …, T$.
+
+For two clustering runs $p$ and $q$, define the *label agreement* as:
+
+$
+A(p, q) = (1 / n) sum_(i=1)^n 1[l_i^(p) = l_i^(q)]
+$
+
+where $1[·]$ is the indicator function.
+
+The overall clustering stability is then defined as the mean pairwise agreement:
+
+$
+S = (2 / (T (T - 1))) sum_(1 ≤ p < q ≤ T) A(p, q)
+$
+
+=== Interpretation
+
+- $S ≈ 1$ indicates that k-means consistently assigns observations to the same
+  clusters across random initializations.
+- Lower values of $S$ indicate sensitivity to initialization and weakly defined
+  cluster boundaries.
+
+=== Limitations
+
+This stability measure:
+- Does not account for permutation invariance of cluster labels
+- May underestimate stability when label switching occurs
+- Is intended for exploratory validation rather than formal inference
+
 = Conclusion
 Summarize findings and next steps.
 
