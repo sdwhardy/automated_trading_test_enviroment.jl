@@ -1,4 +1,41 @@
+"""
+    collapse_clusters(clusters, table_of_means, cols)
 
+Iteratively collapse clusters using a two-stage procedure combining
+statistical similarity and semantic equivalence.
+
+The function proceeds as follows:
+
+1. **Statistical collapse**  
+   Clusters are first merged based on numerical similarity of their
+   feature means using `statistic_collapse_clusters`, with a fixed
+   tolerance `eps = 0.3` applied to the selected feature columns `cols`.
+
+2. **Recompute cluster means**  
+   After merging, cluster-level means and their semantic summaries
+   are recomputed using `calculate_cluster_means`.
+
+3. **Semantic collapse**  
+   Clusters with identical semantic signatures (derived from discretized
+   high-level indicators such as direction, volatility, trend, etc.)
+   are merged using `semantic_collapse_clusters`.
+
+4. **Final recomputation**  
+   Cluster means and semantic stories are recomputed once more after
+   semantic merging. The final semantic table is printed for inspection.
+
+This process reduces clusters while preserving both statistical coherence
+and interpretability.
+
+### Arguments
+- `clusters`: Vector or array of cluster assignments for each observation.
+- `table_of_means`: Initial DataFrame of cluster-level feature means.
+- `cols`: Vector of feature column symbols used for statistical comparison.
+
+### Returns
+- `collapsed_cluster`: Updated cluster assignments after statistical and
+  semantic collapsing.
+"""
 function collapse_clusters(clusters, table_of_means, cols)
 
     result = statistic_collapse_clusters(table_of_means; feature_cols = cols, eps = 0.3)
@@ -20,7 +57,33 @@ function collapse_clusters(clusters, table_of_means, cols)
 end
 
 
+"""
+    merge_clusters(result, best_run)
 
+Merge clusters according to a precomputed cluster merge mapping.
+
+This function applies the `merge_map` contained in `result` to an
+existing clustering (`best_run`) and constructs a new dictionary of
+collapsed clusters. Clusters that map to the same target cluster ID
+are merged by concatenating their underlying data and PCA projections.
+
+For each merged cluster:
+- The `"data"` fields are concatenated and sorted by `:timestamp`.
+- The `"pca"` fields are concatenated and sorted by `:row_idx`.
+
+The function assumes that each entry in `best_run` is a dictionary-like
+object containing at least the keys `"data"` and `"pca"`.
+
+### Arguments
+- `result`: An object with a `merge_map::Dict{Int,Int}` defining how
+  original cluster IDs should be merged.
+- `best_run`: Dictionary of clusters keyed by cluster ID, where each
+  value contains cluster-specific data and PCA results.
+
+### Returns
+- `collapsed_cluster`: Dictionary of merged clusters keyed by the
+  representative cluster IDs defined in `merge_map`.
+"""
 function merge_clusters(result, best_run)
 
     collapsed_cluster=Dict()
@@ -277,7 +340,26 @@ function calculate_cluster_means(clusters,feature_cols)
 end
 
 
+"""
+    mean_of_means(col_name, cols, df)
 
+Compute a row-wise mean over selected columns and store the result as a new column.
+
+This function takes a set of numeric columns from a DataFrame and computes,
+for each row, the arithmetic mean across those columns. The resulting value
+is written into a new column named `col_name`. The operation is performed
+in-place on the provided DataFrame.
+
+### Arguments
+- `col_name`: `Symbol` specifying the name of the output column to be added.
+- `cols`: Vector of `Symbol`s identifying the columns whose row-wise mean
+  should be computed.
+- `df`: `DataFrame` containing the input columns.
+
+### Returns
+- `df`: The same `DataFrame` with an additional column `col_name` holding
+  the row-wise means.
+"""
 function mean_of_means(col_name,cols,df)
         
     df[!,col_name]=mean.(eachrow(df[!,cols]))
@@ -354,7 +436,32 @@ function story_of_means(table_of_means)
 
 end
 
+"""
+    sort_higherFreq_into_clusters(clusters, OHLCVT60_df)
 
+Assign higher-frequency time-series data to existing low-frequency clusters
+using rolling time windows.
+
+For each cluster, this function takes the timestamps associated with the
+cluster’s low-frequency observations and collects all higher-frequency
+rows whose timestamps fall within the corresponding 24-hour window
+`[timestamp, timestamp + 24h)`. The selected rows are appended and aggregated
+per cluster.
+
+This is typically used to project daily (or lower-frequency) clustering
+results onto intraday (e.g. 60-minute) OHLCVT data.
+
+### Arguments
+- `clusters`: Dictionary mapping cluster identifiers to dictionaries that
+  contain at least a `"data"` `DataFrame` with a `:timestamp` column.
+- `OHLCVT60_df`: `DataFrame` of higher-frequency OHLCVT data containing
+  a `:timestamp` column expressed in the same time units.
+
+### Returns
+- `OHLCVT60_clusters`: `Dict{Any,DataFrame}` where each key is a cluster
+  identifier and each value is a `DataFrame` containing all higher-frequency
+  observations assigned to that cluster.
+"""
 function sort_higherFreq_into_clusters(clusters, OHLCVT60_df)
     
     OHLCVT60_clusters = Dict{Any, DataFrame}()
@@ -382,7 +489,30 @@ function sort_higherFreq_into_clusters(clusters, OHLCVT60_df)
 
 end
 
+"""
+    data_into_clusters(OHLCVT_df, df_pca, labels)
 
+Group original observations and their PCA representations into clusters.
+
+This function builds a dictionary of clusters from a vector of cluster labels.
+For each observation, the corresponding row from the PCA DataFrame and the
+aligned row from the original OHLCVT DataFrame are inserted into the same
+cluster entry. Each cluster stores its raw data and PCA-space data separately.
+
+The mapping between `df_pca` and `OHLCVT_df` is established via the
+`:row_idx` column in `df_pca`.
+
+### Arguments
+- `OHLCVT_df`: `DataFrame` containing the original OHLCVT observations.
+- `df_pca`: `DataFrame` containing PCA features and a `:row_idx` column
+  pointing to rows in `OHLCVT_df`.
+- `labels`: Vector of cluster assignments, one per row of `df_pca`.
+
+### Returns
+- `cluster_numbers`: `Dict` mapping each cluster label to a dictionary with:
+  - `"data"`: `DataFrame` of OHLCVT rows belonging to the cluster.
+  - `"pca"`: `DataFrame` of PCA rows belonging to the cluster.
+"""
 function data_into_clusters(OHLCVT_df, df_pca, labels)
     
     cluster_numbers=Dict()
