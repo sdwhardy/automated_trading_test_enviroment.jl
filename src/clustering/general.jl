@@ -170,7 +170,48 @@ function semantic_collapse_clusters(
     )
 end
 
+"""
+    calculate_cluster_means(clusters, feature_cols)
+        -> (table_of_means, story_of_means_df)
 
+Compute cluster-level indicator means and derive semantic aggregate features.
+
+This function aggregates raw indicator features at the cluster level, then
+constructs higher-level semantic descriptors (direction, volatility,
+vol-of-vol, trend, liquidity) by averaging predefined groups of indicators.
+The result is a compact, interpretable representation of each cluster.
+
+# Arguments
+- `clusters`: Dictionary-like object indexed by cluster identifier, where each
+  entry contains a `"data"` field holding a `DataFrame` of observations.
+- `feature_cols`: Vector of indicator column names (`Symbol`) to be aggregated
+  at the cluster level.
+
+# Returns
+- `table_of_means`: `DataFrame` containing, for each cluster:
+  - raw indicator means (from `feature_cols`)
+  - derived semantic means:
+    `:direction`, `:volatility`, `:vol_of_vol`, `:trend`, `:liquidity`
+- `story_of_means_df`: A higher-level, human-readable or categorical
+  interpretation of the semantic means, as produced by `story_of_means`.
+
+# Method
+1. Compute per-cluster means for all raw indicator features.
+2. Aggregate indicator subsets into semantic dimensions using `mean_of_means`:
+   - Direction (returns and momentum)
+   - Volatility (realized and range-based measures)
+   - Volatility of volatility
+   - Trend (moving-average gaps and slopes)
+   - Liquidity (volume and price-impact proxies)
+3. Generate a semantic narrative or categorical summary via `story_of_means`.
+
+# Notes
+- All semantic dimensions are computed as simple arithmetic means of their
+  constituent indicators.
+- The function assumes all required indicator columns are present and numeric.
+- Semantic aggregates are intended for interpretation and regime comparison,
+  not model fitting.
+  """
 function calculate_cluster_means(clusters,feature_cols)
 
     table_of_means = indicator_means_df(clusters,feature_cols)
@@ -245,7 +286,40 @@ function mean_of_means(col_name,cols,df)
 
 end
 
+"""
+    story_of_means(table_of_means::DataFrame) -> DataFrame
 
+Convert continuous semantic cluster means into a symbolic, interpretable representation.
+
+For each cluster `k`, this function maps the mean values of the following
+semantic dimensions:
+
+- `:direction`
+- `:volatility`
+- `:vol_of_vol`
+- `:trend`
+- `:liquidity`
+
+into qualitative signs based on fixed thresholds:
+
+- `"+"` if value ≥ 0.5
+- `"-"` if value ≤ -0.5
+- `"0"` otherwise
+
+The output is a DataFrame where each row corresponds to a cluster and each
+semantic dimension is represented by a categorical sign in `{"+", "0", "-"}`.
+
+This symbolic "story of means" is designed for human interpretability and
+enables downstream operations such as semantic equivalence detection and
+cluster collapsing.
+
+### Arguments
+- `table_of_means::DataFrame`: Must contain column `:k` and the five semantic
+  mean columns listed above.
+
+### Returns
+- `DataFrame`: A semantic signature table with one row per cluster.
+"""
 function story_of_means(table_of_means)
 
     means_of_means_cols=[:direction,:volatility, :vol_of_vol, :trend, :liquidity]

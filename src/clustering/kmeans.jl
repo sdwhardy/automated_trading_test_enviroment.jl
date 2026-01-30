@@ -1,5 +1,56 @@
 
+"""
+    best_k4k_means(df_pca; n_restarts=8, stability_thresh=0.85, min_sil_gain=0.03) -> Int
 
+Select an appropriate number of clusters for k-means using silhouette and
+stability criteria.
+
+This function evaluates k-means clusterings over a range of candidate cluster
+counts and selects the most suitable `k` based on a combination of clustering
+quality (mean silhouette coefficient) and robustness to random initialization
+(clustering stability).
+
+# Arguments
+- `df_pca`: `DataFrame` containing PCA-transformed features. All columns except
+  `:row_idx` are treated as numeric inputs to k-means.
+- `n_restarts`: Number of random k-means initializations used when estimating
+  clustering stability (default: `8`).
+- `stability_thresh`: Minimum required clustering stability for a candidate `k`
+  to be considered valid (default: `0.85`).
+- `min_sil_gain`: Minimum acceptable mean silhouette value; if the selected
+  configuration falls below this threshold, the function falls back to
+  `k = 1` (default: `0.03`).
+
+# Returns
+- `Int`: Selected number of clusters.
+
+# Method
+1. Extract PCA features from `df_pca`.
+2. For each candidate `k ∈ {2, …, min(10, n)}`:
+   - Fit a k-means model with random initialization.
+   - Compute the mean silhouette coefficient.
+   - Estimate clustering stability via repeated restarts.
+3. Discard cluster counts whose stability is below `stability_thresh`.
+4. If stable candidates exist, select the smallest `k` with the highest
+   silhouette score among them.
+5. If no candidate meets the stability threshold, select the `k` with maximum
+   stability.
+6. If the selected configuration has a silhouette below `min_sil_gain`, return
+   `k = 1`.
+
+# Interpretation
+- Higher silhouette values indicate better-separated clusters.
+- Higher stability values indicate robustness to initialization.
+- Returning `k = 1` indicates insufficient evidence for meaningful clustering.
+
+# Notes
+- Stability is sensitive to label permutation and is used here as a heuristic.
+- Random initialization may lead to variability unless the RNG is controlled
+  externally.
+- The upper bound of `k = 10` is a hard cap specific to the current use case.
+
+# Example
+"""
 function best_k4k_means(df_pca; n_restarts = 8, stability_thresh = 0.85, min_sil_gain = 0.03) 
     # Extract PCA features only (drop row_idx)
     X = Matrix(df_pca[:, Not(:row_idx)])'   # 5650 × 8

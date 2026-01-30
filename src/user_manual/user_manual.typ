@@ -16,19 +16,7 @@
 // ----------------------------
 //= Technical Manual  
 #datetime.today()
-
-// ----------------------------
-// Abstract (optional)
-// ----------------------------
-= Abstract
-This document briefly describes the purpose of the work.
-
-// ----------------------------
-// Main sections
-// ----------------------------
-= Introduction
-Introduce the problem, background, and motivation.
-
+#outline()
 = Indicators
 
 == Logarithmic Returns
@@ -682,7 +670,7 @@ $
 S = (1 / n) sum_(i=1)^n s(i)
 $
 
-==== Usage
+*Usage*
 
 The silhouette coefficient is used to:
 - Evaluate clustering quality without ground-truth labels
@@ -726,6 +714,92 @@ This stability measure:
 - Does not account for permutation invariance of cluster labels
 - May underestimate stability when label switching occurs
 - Is intended for exploratory validation rather than formal inference
+
+== Merging Clusters
+=== Statistical collapsing of clusters
+
+This procedure reduces an initial set of clusters by *merging statistically similar clusters* based on their feature-wise mean values.
+
+Let:
+- $K$ be the number of initial clusters,
+- $d$ be the number of selected indicator features,
+- $M ∈ ℝ^{K × d}$ be the matrix of cluster-wise feature means, where
+  row $M_i$ corresponds to cluster $i$.
+
+A distance threshold $ε > 0$ controls when two clusters are considered
+statistically indistinguishable.
+
+==== Normalized inter-cluster distance
+
+For every pair of clusters $(i, j)$, a normalized Euclidean distance is computed:
+
+$
+D_(i,j) = (‖M_i - M_j‖_2)/(sqrt(d))
+$
+
+The normalization by $sqrt(d)$ ensures that distances remain comparable as
+the number of features increases.
+
+==== Graph-based merging rule
+
+Clusters are treated as nodes in an undirected graph.
+An edge is introduced between clusters $i$ and $j$ if:
+
+$
+D_(i,j) < ε
+$
+
+All connected components of this graph are then merged into single
+*collapsed clusters*.
+
+This operation removes redundant clusters whose mean feature profiles are
+closer than the specified tolerance $ε$. It is intended as a *post-processing*
+step after clustering, improving interpretability and robustness without
+re-fitting the original model.
+
+=== Semantic collapsing of clusters
+
+This procedure collapses clusters that are *semantically identical* based on derived, interpretable semantic dimensions computed from underlying indicator means.
+
+Unlike statistical collapsing, which relies on numeric distance thresholds, semantic collapsing operates on *exact equality* of high-level regime descriptors.
+
+==== Semantic feature construction
+
+Let $K$ be the set of initial clusters and let $M ∈ ℝ^{K × d}$ denote the matrix of raw indicator means computed per cluster.
+
+From these indicators, five semantic dimensions are derived:
+
+- *Direction*: aggregated return and momentum indicators  
+- *Volatility*: aggregated realized and range-based volatility measures  
+- *Volatility of volatility*: higher-order volatility dynamics  
+- *Trend*: moving-average differences and slope indicators  
+- *Liquidity*: volume and price-impact proxies  
+
+Each semantic dimension is computed as the arithmetic mean of a predefined
+subset of indicator means.
+
+For cluster $k$, define the semantic feature vector:
+
+$
+s(k) = (s_"dir"(k), s_"vol"(k), s_"vov"(k),
+        s_"trend"(k), s_"liq"(k))
+$
+
+==== Semantic Story of Cluster Means
+
+Given a semantic feature vector, $s(k)$, this step derives a *semantic story* for each cluster by discretizing high-level indicators into qualitative signs.
+
+For each cluster $k$ and for each semantic dimension
+(direction, volatility, volatility-of-volatility, trend, liquidity),
+the corresponding mean value is mapped to a symbolic label:
+
+- `"+"` if the mean is greater than or equal to `0.5`
+- `"-"` if the mean is less than or equal to `-0.5`
+- `"0"` otherwise
+
+The result is a compact categorical representation of each cluster’s behavior, suitable for interpretation, comparison, and downstream semantic collapsing of clusters with identical signatures.
+
+This operation removes redundancy at the *interpretation layer*, producing a compact and human-interpretable set of market regimes suitable for reporting, analysis, and downstream decision logic.
 
 = Conclusion
 Summarize findings and next steps.
