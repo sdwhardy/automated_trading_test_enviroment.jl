@@ -1,6 +1,10 @@
 #module automated_trading_test_environment
 
-using CSV, DataFrames, Dates, TimeZones, Statistics, LinearAlgebra, Indicators, GaussianMixtures, Distributions, StatsBase, Clustering, Plots, MultivariateStats, Distances
+using CSV, DataFrames, Dates, TimeZones, Statistics, 
+LinearAlgebra, Indicators, GaussianMixtures, Distributions, 
+StatsBase, Clustering, Plots, MultivariateStats, Distances,
+Suppressor
+
 include("Indicators.jl")
 include("normalize.jl")
 include("data.jl")

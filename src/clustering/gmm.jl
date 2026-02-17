@@ -443,40 +443,43 @@ function k_clusters_i_times(
     _k::Int = 5,
     _i::Int = 5,
 )
-    # Top-level container: keyed by number of clusters k
-    gmm_results = Dict()
+    
+    @suppress begin
+        # Top-level container: keyed by number of clusters k
+        gmm_results = Dict()
 
-    # Iterate over number of clusters
-    for k in 2:_k
-        push!(gmm_results, k => Dict())
+        # Iterate over number of clusters
+        for k in 2:_k
+            push!(gmm_results, k => Dict())
 
-        # Repeat clustering multiple times for robustness
-        for i in 1:_i
-            push!(gmm_results[k], i => Dict())
+            # Repeat clustering multiple times for robustness
+            for i in 1:_i
+                push!(gmm_results[k], i => Dict())
 
-            # Perform GMM clustering in PCA space
-            gmm_clusters = k_gmm_clusters(df_pca, k)
+                # Perform GMM clustering in PCA space
+                gmm_clusters = k_gmm_clusters(df_pca, k)
 
-            # Map cluster labels back to the original OHLCVT data
-            clusters = data_into_clusters(
-                OHLCVT_df,
-                df_pca,
-                gmm_clusters["best_labels"],
-            )
+                # Map cluster labels back to the original OHLCVT data
+                clusters = data_into_clusters(
+                    OHLCVT_df,
+                    df_pca,
+                    gmm_clusters["best_labels"],
+                )
 
-            # Compute per-cluster feature statistics
-            table_of_means, story_of_means_df =
-                calculate_cluster_means(clusters, feature_cols)
+                # Compute per-cluster feature statistics
+                table_of_means, story_of_means_df =
+                    calculate_cluster_means(clusters, feature_cols)
 
-            # Store results for this (k, i) combination
-            push!(gmm_results[k][i], "gmm_clusters" => gmm_clusters)
-            push!(gmm_results[k][i], "clusters" => clusters)
-            push!(gmm_results[k][i], "table_of_means" => table_of_means)
-            push!(gmm_results[k][i], "story_of_means_df" => story_of_means_df)
+                # Store results for this (k, i) combination
+                push!(gmm_results[k][i], "gmm_clusters" => gmm_clusters)
+                push!(gmm_results[k][i], "clusters" => clusters)
+                push!(gmm_results[k][i], "table_of_means" => table_of_means)
+                push!(gmm_results[k][i], "story_of_means_df" => story_of_means_df)
+            end
         end
+        return gmm_results
     end
-
-    return gmm_results
+    
 end
 
 """

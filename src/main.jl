@@ -80,6 +80,28 @@
     
     collapsed_cluster = collapse_clusters(gmm_result["clusters"], gmm_result["table_of_means"], pca_cols)
 
+    # --------------------------------------------------------------------------------------------------
+    # Do clusters represent useful Regimes?
+    # --------------------------------------------------------------------------------------------------
+    regime_nextday_stats=check_clusters_predictive_quality(collapsed_cluster, OHLCVT_df);
+
+    #Building A Risk Metric 
+    #Component	Base metric
+    #Returns	Log returns
+    #Volatility	Rolling std (daily)
+    #Liquidity	Dollar volume
+    #Valuation	Price z-score
+
+
+
+
+
+
+
+
+
+
+
     ####################################################################################################
     # BTC — Hourly interval
     ####################################################################################################
@@ -130,9 +152,9 @@
 
         table_of_means, story_of_means_df = calculate_cluster_means(kmeans_cluster,pca_cols)
 
-        collapsed_cluster = collapse_clusters(kmeans_cluster, table_of_means, pca_cols)
+        collapsed_cluster_60 = collapse_clusters(kmeans_cluster, table_of_means, pca_cols)
         
-        push!(OHLCVT60_hourly_clusters,cluster=>Dict("collapsed_cluster"=>collapsed_cluster,"story_of_means_df"=>story_of_means_df))
+        push!(OHLCVT60_hourly_clusters,cluster=>Dict("collapsed_cluster"=>collapsed_cluster_60,"story_of_means_df"=>story_of_means_df))
   
     end
 
@@ -141,6 +163,17 @@
     end
 
 
+    
+    
+    minimum(collect(skipmissing(OHLCVT_df.lnReturn1day)))#-12.315480371484448
+    maximum(collect(skipmissing(OHLCVT_df.lnReturn1day)))#8.7607212
+    
+    mean(collect(skipmissing(OHLCVT_df.lnReturn1day)))#-6.79782574274193e-18
+    std(collect(skipmissing(OHLCVT_df.lnReturn1day)))#1.0
+    
+    
+    
+    
 
 
 

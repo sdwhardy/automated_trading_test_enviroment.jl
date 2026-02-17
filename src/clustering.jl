@@ -793,3 +793,14 @@ function k_means_set(df_pca, best_k, OHLCVT)
     return kmeans_cluster
 
 end=#
+
+    result = weekly_crypto_backtest(
+        csv_path        = r"C:\Users\st_ha\OneDrive\Documents\github\automated_trading_test_environment.jl\src\data\Kraken_OHLCVT\XBTUSD_1440.csv",
+        fred_api_key    = "6dd5d65c0b6778e9433a7934ee82eb94",
+        asset_name      = "BTC",
+        block           = "CB_Balance_Sheets_PC1",
+        level_threshold = 0.0,
+        momentum_window = 4,      # weeks for WALCL rolling growth
+        lag_weeks       = 1,
+    )
+    print(result["stats"])
